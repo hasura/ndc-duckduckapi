@@ -1,17 +1,14 @@
 import { NotSupported, ObjectType } from '@hasura/ndc-sdk-typescript';
-import { Configuration } from './src';
 import * as duckdb from 'duckdb';
 import * as fs from 'fs';
 import { promisify } from "util";
+import { Configuration } from './src/duckduckapi';
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 let HASURA_CONFIGURATION_DIRECTORY = process.env["HASURA_CONFIGURATION_DIRECTORY"] as string | undefined;
 if (HASURA_CONFIGURATION_DIRECTORY === undefined || HASURA_CONFIGURATION_DIRECTORY.length === 0){
     HASURA_CONFIGURATION_DIRECTORY = ".";
 }
-const DUCKDB_URL = process.env["DUCKDB_URL"] as string;
-const db = new duckdb.Database(DUCKDB_URL);
-const con = db.connect();
 
 const determineType = (t: string): string => {
     switch (t) {
@@ -78,14 +75,16 @@ async function queryAll(con: any, query: any): Promise<any[]> {
                 resolve(res);
             }
         })
+        
     })
 };
 
-async function main() {
+
+export async function generateConfig(db: duckdb.Database): Promise<Configuration> {
     const tableNames: string[] = [];
     const tableAliases: {[k: string]: string} = {};
     const objectTypes: { [k: string]: ObjectType } = {};
-    const tables = await queryAll(con, "SHOW ALL TABLES");
+    const tables = await queryAll(db.connect(), "SHOW ALL TABLES");
     for (let table of tables){
         const tableName = `${table.database}_${table.schema}_${table.name}`;
         const aliasName = `${table.database}.${table.schema}.${table.name}`;
@@ -110,25 +109,19 @@ async function main() {
             collection_names: tableNames,
             collection_aliases: tableAliases,
             object_types: objectTypes,
-            functions: [],
+            functions: [{
+                name: "Hello",
+                arguments: {},
+                result_type: {
+                    type: "named",
+                    name: "String"
+                },
+                description: "hello function"
+            }],
             procedures: []
         }
     };
-    const jsonString = JSON.stringify(res, null, 4);
-    let filePath = `${HASURA_CONFIGURATION_DIRECTORY}/config.json`;
-    try {
-        const existingData = await readFile(filePath, 'utf8');
-        if (existingData !== jsonString) {
-            await writeFile(filePath, jsonString);
-            console.log('File updated.');
-        } else {
-            console.log('No changes detected. File not updated.');
-        }
-    } catch (error) {
-        await writeFile(filePath, jsonString);
-        console.log('New file written.');
-    }
-};
-
-main();
+    console.log(res);
+    return Promise.resolve(res);
+}
 

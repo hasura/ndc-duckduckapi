@@ -8,10 +8,12 @@ import {
   Conflict,
   Relationship
 } from "@hasura/ndc-sdk-typescript";
-import { Configuration, State } from "..";
+import { Configuration, State } from "../duckduckapi";
 const SqlString = require("sqlstring-sqlite");
 import { MAX_32_INT } from "../constants";
 // import { format } from "sql-formatter";
+// import { helloWorld } from "../stub.functions";
+import { functions } from "../stub.functions";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -465,11 +467,29 @@ async function perform_query(
   return response;
 }
 
+function is_query_function(query: QueryRequest, configuration: Configuration): boolean {
+  if (configuration.config) {
+    return configuration.config.functions.some(func => func.name === query.collection);
+  };
+  return false;
+}
+
+async function perform_query_function(state: State, query: QueryRequest) {
+  return functions[query.collection]()
+}
+
 export async function do_query(
   configuration: Configuration,
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
-  let query_plans = await plan_queries(configuration, query);
-  return await perform_query(state, query_plans);
+  console.log(query);
+  
+  if (is_query_function(query, configuration)) {
+    return await perform_query_function(state, query);
+  } else {
+    let query_plans = await plan_queries(configuration, query);
+    return await perform_query(state, query_plans);
+  }
 }
+

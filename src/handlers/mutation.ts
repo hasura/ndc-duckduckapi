@@ -1,5 +1,5 @@
 import { MutationOperation, MutationOperationResults, MutationRequest, MutationResponse, Forbidden } from "@hasura/ndc-sdk-typescript";
-import { Configuration } from "..";
+import { Configuration } from "../duckduckapi";
 
 
 export async function do_mutation(configuration: Configuration, mutation: MutationRequest): Promise<MutationResponse> {

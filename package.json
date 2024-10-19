@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "ts-node ./src/index.ts serve --configuration=.",
-    "generate-config": "ts-node generate-config"
+    "generate-config": "ts-node generate-config",
+    "watch": "nodemon --watch \"src/**\" --ext \"ts,json\" --ignore \"src/**/*.spec.ts\" --exec \"ts-node src/index.ts serve --configuration=."
   },
   "devDependencies": {
     "ts-node": "^10.9.1",

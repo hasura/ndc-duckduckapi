@@ -1,8 +1,15 @@
 import { CollectionInfo, SchemaResponse } from "@hasura/ndc-sdk-typescript";
-import { Configuration } from "..";
+import { Configuration } from "../duckduckapi";
 import { SCALAR_TYPES } from "../constants";
 
 export function do_get_schema(configuration: Configuration): SchemaResponse {
+    /** TODO
+     * 
+    - Get the user to write a duckdb schema file
+    - Get the user to write some functions
+     * 
+     * 
+     */
     const {config} = configuration;
     if (!config){
         throw new Error("Configuration is missing");
