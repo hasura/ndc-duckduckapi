@@ -1,4 +1,4 @@
-# Hasura DuckDB Connector
+# Hasura DuckDuckAPI connector
 <a href="https://duckdb.org/"><img src="https://github.com/hasura/ndc-duckdb/blob/main/docs/logo.svg" align="right" width="200"></a>
 
 [![Docs](https://img.shields.io/badge/docs-v3.x-brightgreen.svg?style=flat)](https://hasura.io/connectors/duckdb)
@@ -6,14 +6,39 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-purple.svg?style=flat)](https://github.com/hasura/ndc-duckdb/blob/main/LICENSE.txt)
 [![Status](https://img.shields.io/badge/status-alpha-yellow.svg?style=flat)](https://github.com/hasura/ndc-duckdb/blob/main/README.md)
 
-The Hasura DuckDB Connector allows for connecting to a DuckDB database or a MotherDuck hosted DuckDB database to give you an instant GraphQL API on top of your DuckDB data.
+This DuckDuckAPI connector allows you to easily build a high-performing connector to expose existing API services, where reads happen against DuckDB and writes happen directly to the upstream API servce. This is ideal to make the API data accessible to LLMs via PromptQL, 
 
-This connector is built using the [Typescript Data Connector SDK](https://github.com/hasura/ndc-sdk-typescript) and implements the [Data Connector Spec](https://github.com/hasura/ndc-spec).
+1. Create a DuckDB schema and write a loading script to load data from an API into DuckDB
+2. Implement functions to wrap over upstream API endpoints, particularly for write operations
 
-- [See the listing in the Hasura Hub](https://hasura.io/connectors/duckdb)
-- [Hasura V3 Documentation](https://hasura.io/docs/3.0/index/)
+This allows a GraphQL or PromptQL query to run against API data in a highly flexible way without performance or rate limiting issues.
+Ofcourse, the tradeoff is that the data will only be eventually consistent because writes will only reflect as reads from DuckDB depending on how fast API data is updated in DuckDB (via the loader script).
 
-## Features
+## Get started
+
+1. Clone this repo
+2. Setup: `npm i &&`
+3. Run: `HASURA_CONNECTOR_PORT=9094 ts-node ./src/index.ts serve --configuration=.`
+4. Add to your DDN project:
+  ```
+  $> ddn supergraph init new-project
+  $> ddn connector-link add myapi --configure-host http://local.hasura.dev:9094
+  $> ddn models add myapi '*'
+  $> ddn commands add myapi '*'
+  $> ddn supergraph build local
+  $> ddn run docker-start
+  $> ddn console --local
+  ```
+
+## How to build an API integration
+
+1. Edit the schema
+2. Edit the loader.ts file
+3. Add to the functions.ts file
+
+To test, run the ts connector and refresh the supergraph project (step 3 onwards in the Get Started above).
+
+## Duck DB Features
 
 Below, you'll find a matrix of all supported features for the DuckDB connector:
 
@@ -32,100 +57,134 @@ Below, you'll find a matrix of all supported features for the DuckDB connector:
 | Custom Fields                   | ❌     |       |
 | Mutations                       | ❌     |       |
 
-## Before you get Started
+## Functions features
 
-1. The [DDN CLI](https://hasura.io/docs/3.0/cli/installation) and [Docker](https://docs.docker.com/engine/install/) installed
-2. A [supergraph](https://hasura.io/docs/3.0/getting-started/init-supergraph)
-3. A [subgraph](https://hasura.io/docs/3.0/getting-started/init-subgraph)
-4. Have a [MotherDuck](https://motherduck.com/) hosted DuckDB database, or a persitent DuckDB database file — for supplying data to your API.
+Any functions exported from `functions.ts` are made available as NDC functions/procedures to use in your Hasura metadata and expose as GraphQL fields in queries or mutation.
 
-The steps below explain how to Initialize and configure a connector for local development. You can learn how to deploy a
-connector — after it's been configured — [here](https://hasura.io/docs/3.0/getting-started/deployment/deploy-a-connector).
+#### Queries
+If you write a function that performs a read-only operation, you should mark it with the `@readonly` JSDoc tag, and it will be exposed as an NDC function, which will ultimately show up as a GraphQL query field in Hasura.
 
-## Using the DuckDB connector
-
-### Step 1: Authenticate your CLI session
-
-```bash
-ddn auth login
+```typescript
+/** @readonly */
+export function add(x: number, y: number): number {
+  return x + y;
+}
 ```
 
-### Step 2: Configure the connector
+#### Mutations
+Functions without the `@readonly` JSDoc tag are exposed as NDC procedures, which will ultimately show up as a GraphQL mutation field in Hasura.
 
-Once you have an initialized supergraph and subgraph, run the initialization command in interactive mode while providing a name for the connector in the prompt:
+Arguments to the function end up being field arguments in GraphQL and the return value is what the field will return when queried. Every function must return a value; `void`, `null` or `undefined` is not supported.
 
-```bash
-ddn connector init duckdb -i
+```typescript
+/** @readonly */
+export function hello(name: string, year: number): string {
+  return `Hello ${name}, welcome to ${year}`
+}
 ```
 
-#### Step 2.1: Choose the `hasura/duckdb` option from the list
+#### Async functions
+Async functions are supported:
 
-#### Step 2.2: Choose a port for the connector
+```typescript
+type HttpStatusResponse = {
+  code: number
+  description: string
+}
 
-The CLI will ask for a specific port to run the connector on. Choose a port that is not already in use or use the default suggested port.
-
-#### Step 2.3: Provide the env var(s) for the connector
-
-| Name | Description |
-|-|-|
-| DUCKDB_URL       | The connection string for the DuckDB database, or the file path to the DuckDB database file |
-
-You'll find the environment variables in the `.env` file and they will be in the format:
-
-`<SUBGRAPH_NAME>_<CONNECTOR_NAME>_<VARIABLE_NAME>`
-
-Here is an example of what your `.env` file might look like:
-
-```
-APP_DUCKDB_AUTHORIZATION_HEADER="Bearer SPHZWfL7P3Jdc9mDMF9ZNA=="
-APP_DUCKDB_DUCKDB_URL="md:?motherduck_token=ey..."
-APP_DUCKDB_HASURA_SERVICE_TOKEN_SECRET="SPHZWfL7P3Jdc9mDMF9ZNA=="
-APP_DUCKDB_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://local.hasura.dev:4317"
-APP_DUCKDB_OTEL_SERVICE_NAME="app_duckdb"
-APP_DUCKDB_READ_URL="http://local.hasura.dev:7525"
-APP_DUCKDB_WRITE_URL="http://local.hasura.dev:7525"
+export async function test(): Promise<string> {
+  const result = await fetch("http://httpstat.us/200")
+  const responseBody = await result.json() as HttpStatusResponse;
+  return responseBody.description;
+}
 ```
 
-If you are attaching to a local DuckDB file, first make sure that the file is located inside the connector directory. For example, if you had a `data.duckdb` file you could place it at `/app/connector/duckdb/data.duckdb`. Files in the connector directory get mounted to `/etc/connector/`. 
+#### Multiple functions files
+If you'd like to split your functions across multiple files, do so, then simply re-export them from `functions.ts` like so:
 
-In this instance, you would set the `DUCKDB_URL=/etc/connector/data.duckdb`. Now your `.env` might look like this:
-
-```
-APP_DUCKDB_AUTHORIZATION_HEADER="Bearer SPHZWfL7P3Jdc9mDMF9ZNA=="
-APP_DUCKDB_DUCKDB_URL="/etc/connector/data.duckdb"
-APP_DUCKDB_HASURA_SERVICE_TOKEN_SECRET="SPHZWfL7P3Jdc9mDMF9ZNA=="
-APP_DUCKDB_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://local.hasura.dev:4317"
-APP_DUCKDB_OTEL_SERVICE_NAME="app_duckdb"
-APP_DUCKDB_READ_URL="http://local.hasura.dev:7525"
-APP_DUCKDB_WRITE_URL="http://local.hasura.dev:7525"
+```typescript
+export * from "./another-file-1"
+export * from "./another-file-2"
 ```
 
-Your experience mounting files may vary, and while useful to explore a file locally, it's not recommended to attempt to deploy a connector using a locally mounted file.
+### Supported types
+The basic scalar types supported are:
 
-### Step 3: Introspect the connector
+* `string` (NDC scalar type: `String`)
+* `number` (NDC scalar type: `Float`)
+* `boolean` (NDC scalar type: `Boolean`)
+* `bigint` (NDC scalar type: `BigInt`, represented as a string in JSON)
+* `Date` (NDC scalar type: `DateTime`, represented as an [ISO formatted](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString) string in JSON)
 
-Introspecting the connector will generate a `config.json` file and a `duckdb.hml` file.
+You can also import `JSONValue` from the SDK and use it to accept and return arbitrary JSON. Note that the value must be serializable to JSON.
 
-```bash
-ddn connector introspect duckdb
+```typescript
+import * as sdk from "@hasura/ndc-lambda-sdk"
+
+export function myFunc(json: sdk.JSONValue): sdk.JSONValue {
+  const propValue =
+    json.value instanceof Object && "prop" in json.value && typeof json.value.prop === "string"
+      ? json.value.prop
+      : "default value";
+  return new sdk.JSONValue({prop: propValue});
+}
 ```
 
-### Step 4: Add your resources
+`null`, `undefined` and optional arguments/properties are supported:
 
-You can add the models, commands, and relationships to your API by tracking them which generates the HML files. 
+```typescript
+export function myFunc(name: string | null, age?: number): string {
+  const greeting = name != null
+    ? `hello ${name}`
+    : "hello stranger";
+  const ageStatement = age !== undefined
+    ? `you are ${age}`
+    : "I don't know your age";
 
-```bash
-ddn connector-link add-resources duckdb
+  return `${greeting}, ${ageStatement}`;
+}
 ```
 
-## Documentation
+However, any `undefined`s in the return type will be converted to nulls, as GraphQL does not have the concept of `undefined`.
 
-View the full documentation for the DuckDB connector [here](https://github.com/hasura/ndc-duckdb/blob/main/docs/index.md).
+Object types and interfaces are supported. The types of the properties defined on these must be supported types.
 
-## Contributing
+```typescript
+type FullName = {
+  title: string
+  firstName: string
+  surname: string
+}
 
-Check out our [contributing guide](https://github.com/hasura/ndc-duckdb/blob/main/docs/contributing.md) for more details.
+interface Greeting {
+  polite: string
+  casual: string
+}
 
-## License
+export function greet(name: FullName): Greeting {
+  return {
+    polite: `Hello ${name.title} ${name.surname}`,
+    casual: `G'day ${name.firstName}`
+  }
+}
+```
 
-The DuckDB connector is available under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+Arrays are also supported, but can only contain a single type (tuple types are not supported):
+
+```typescript
+export function sum(nums: number[]): number {
+  return nums.reduce((prev, curr) => prev + curr, 0);
+}
+```
+
+Anonymous types are supported, but will be automatically named after the first place they are used. It is recommended that you **avoid using anonymous types**. Instead, prefer to name all your types to ensure the type name does not change unexpectedly as you rename usage sites and re-order usages of the anonymous type.
+
+```typescript
+export function greet(
+  name: { firstName: string, surname: string } // This type will be automatically named greet_name
+): string {
+  return `Hello ${name.firstName} ${name.surname}`;
+}
+```
+
+For more docs refer to the underlying [TypeScript Lambda functions connector README](https://github.com/hasura/ndc-nodejs-lambda/blob/main/ndc-lambda-sdk/test/inference/basic-inference/simple-types.ts#functions);
