@@ -397,8 +397,7 @@ export async function plan_queries(
   if (configuration.config === null || configuration.config === undefined) {
     throw new Forbidden("Connector is not properly configured", {});
   }
-  let collection_alias: string =
-    configuration.config.collection_aliases[query.collection];
+  let collection_alias: string = configuration.config.collection_aliases[query.collection];
   let query_plan: SQLQuery[];
   if (query.variables) {
     let promises = query.variables.map((varSet) => {
@@ -443,6 +442,7 @@ export async function plan_queries(
 
 async function do_all(con: any, query: SQLQuery): Promise<any[]> {
   return new Promise((resolve, reject) => {
+
     con.all(query.sql, ...query.args, function (err: any, res: any) {
       if (err) {
         reject(err);
@@ -464,6 +464,7 @@ async function perform_query(
     const row_set = JSON.parse(res[0]["data"] as string) as RowSet;
     response.push(row_set);
   }
+  con.close();
   return response;
 }
 
@@ -483,8 +484,6 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
-  console.log(query);
-  
   if (is_query_function(query, configuration)) {
     return await perform_query_function(state, query);
   } else {

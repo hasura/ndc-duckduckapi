@@ -68,8 +68,9 @@ const connector: Connector<Configuration, State> = {
    * @param metrics
    */
   tryInitState(_: Configuration, __: unknown): Promise<State> {
-    const credentials: CredentialSchema = { url: DUCKDB_URL };
-    const client = new duckdb.Database(credentials.url, DUCKDB_CONFIG);
+    // const credentials: CredentialSchema = { url: DUCKDB_URL };
+    // const client = new duckdb.Database(credentials.url, DUCKDB_CONFIG);
+    const client = db;
     return Promise.resolve({ client: client });
   },
 
@@ -207,7 +208,7 @@ async function createDuckDBFile(schema: string): Promise<void> {
 
 export interface duckduckapi {
   dbSchema: string
-  loaderJob(): void;
+  loaderJob(db: duckdb.Database): void;
   getFunctions(): void;
 }
 
@@ -218,6 +219,6 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
   */
   await createDuckDBFile(dda.dbSchema);
   // spawn loaderjob execution on a cron
-  dda.loaderJob();
+  dda.loaderJob(db);
   return Promise.resolve(connector);
 }
