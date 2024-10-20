@@ -11,7 +11,6 @@ import {
 import { Configuration, State } from "../duckduckapi";
 const SqlString = require("sqlstring-sqlite");
 import { MAX_32_INT } from "../constants";
-import { functions } from "../stub.functions";
 import { executeQuery } from "../lambda-sdk/execution";
 
 const escape_single = (s: any) => SqlString.escape(s);

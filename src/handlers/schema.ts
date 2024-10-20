@@ -2,7 +2,6 @@ import { CollectionInfo, SchemaResponse, ScalarType, ObjectType} from "@hasura/n
 import { Configuration } from "../duckduckapi";
 import { SCALAR_TYPES } from "../constants";
 import { getNdcSchema } from "../lambda-sdk/schema";
-import { functions } from "../stub.functions";
 
 export function do_get_schema(configuration: Configuration): SchemaResponse {
     /** TODO
