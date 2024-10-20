@@ -6,7 +6,6 @@ import * as duckdb from "duckdb";
 const calendar: duckduckapi = {
   // DROP TABLE IF EXISTS users;
   dbSchema: `
-    DROP TABLE IF EXISTS users;
     CREATE TABLE IF NOT EXISTS users (id int, name string);
   `,
 
