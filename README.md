@@ -36,6 +36,10 @@ Ofcourse, the tradeoff is that the data will only be eventually consistent becau
 
 To test, run the ts connector and refresh the supergraph project (step 3 onwards in the Get Started above).
 
+## Configure API access with OAuth2
+
+_TODO:_
+
 ## Duck DB Features
 
 Below, you'll find a matrix of all supported features for the DuckDB connector:
