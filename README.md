@@ -10,7 +10,7 @@ This DuckDuckAPI connector allows you to easily build a high-performing connecto
 2. Implement functions to wrap over upstream API endpoints, particularly for write operations
 
 This allows a GraphQL or PromptQL query to run against API data in a highly flexible way without performance or rate limiting issues.
-Ofcourse, the tradeoff is that the data will only be eventually consistent because writes will only reflect as reads from DuckDB depending on how fast API data is updated in DuckDB (via the loader script).
+Ofcourse, the tradeoff is that the data will only be eventually consistent because writes will reflect in subsequent reads only after the API data gets updated in DuckDB (via the loader script).
 
 ## Get started
 
