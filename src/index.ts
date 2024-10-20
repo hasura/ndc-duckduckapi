@@ -1,18 +1,16 @@
 import {start} from "@hasura/ndc-sdk-typescript";
-import { makeConnector, duckduckapi, db} from "./duckduckapi";
+import { makeConnector, duckduckapi, db, deriveTypes} from "./duckduckapi";
 import * as duckdb from "duckdb";
-// get any api credentials from env vars
+
+const derivedTypes = deriveTypes('./functions.ts');
+console.log(derivedTypes);
 
 const calendar: duckduckapi = {
-  // DROP TABLE IF EXISTS users;
+
   dbSchema: `
     CREATE TABLE IF NOT EXISTS users (id int, name string);
+    CREATE TABLE IF NOT EXISTS articles (id int, title string);
   `,
-
-  getFunctions: () => {
-      console.log("Getting functions...");
-      // Implementation for retrieving functions
-  },
 
   loaderJob: (db: duckdb.Database) => {
     console.log("Running loader job...");
@@ -34,7 +32,13 @@ const calendar: duckduckapi = {
         }
       }
     insertLoop();
-  }
+  },
+
+  getFunctions: () => {
+      console.log("Getting functions...");
+      // Implementation for retrieving functions
+  },
+
 };
 
 (async () => {

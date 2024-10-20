@@ -484,6 +484,7 @@ export async function do_query(
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
+  console.log(query);
   if (is_query_function(query, configuration)) {
     return await perform_query_function(state, query);
   } else {

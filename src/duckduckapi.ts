@@ -22,6 +22,9 @@ import { readFileSync } from "fs";
 import * as duckdb from "duckdb";
 import { generateConfig } from "../generate-config";
 
+// Get functions
+import { deriveSchema, printCompilerDiagnostics, printFunctionIssues } from './lambda-sdk/inference';
+
 const DUCKDB_URL =  'duck.db'; // process.env["DUCKDB_URL"] as string || "duck.db";
 export const db = new duckdb.Database(DUCKDB_URL);
 
@@ -221,4 +224,28 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
   // spawn loaderjob execution on a cron
   dda.loaderJob(db);
   return Promise.resolve(connector);
+}
+
+export function deriveTypes(functionsFilePath : string) {
+
+  // Derive the schema
+  const schemaResults = deriveSchema(require.resolve(functionsFilePath));
+
+  // Check for compiler diagnostics
+  if (schemaResults.compilerDiagnostics.length > 0) {
+    console.error('Compiler diagnostics:');
+    printCompilerDiagnostics(schemaResults.compilerDiagnostics);
+  }
+
+  // Check for function issues
+  if (Object.keys(schemaResults.functionIssues).length > 0) {
+    console.error('Function issues:');
+    printFunctionIssues(schemaResults.functionIssues);
+  }
+
+  // If there are no issues, you can use the derived schema
+  if (schemaResults.compilerDiagnostics.length === 0 && Object.keys(schemaResults.functionIssues).length === 0) {
+    console.log('Derived schema:', JSON.stringify(schemaResults.functionsSchema, null, 2));
+  }
+  return schemaResults;
 }

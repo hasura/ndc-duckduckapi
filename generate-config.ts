@@ -86,7 +86,7 @@ export async function generateConfig(db: duckdb.Database): Promise<Configuration
     const objectTypes: { [k: string]: ObjectType } = {};
     const tables = await queryAll(db.connect(), "SHOW ALL TABLES");
     for (let table of tables){
-        const tableName = `${table.database}_${table.schema}_${table.name}`;
+        const tableName = table.name; // `${table.database}_${table.schema}_${table.name}`;
         const aliasName = `${table.database}.${table.schema}.${table.name}`;
         tableNames.push(tableName);
         tableAliases[tableName] = aliasName;
@@ -111,7 +111,18 @@ export async function generateConfig(db: duckdb.Database): Promise<Configuration
             object_types: objectTypes,
             functions: [{
                 name: "Hello",
-                arguments: {},
+                arguments: {
+                   _headers: {
+                    description: 'oauth2 headers',
+                    type: {
+                        type: 'array',
+                        element_type: {
+                            type: 'named',
+                            name: 'String'
+                        }
+                    }
+                   } 
+                },
                 result_type: {
                     type: "named",
                     name: "String"
