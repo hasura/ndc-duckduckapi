@@ -2,11 +2,11 @@ import { NotSupported, ObjectType } from '@hasura/ndc-sdk-typescript';
 import * as duckdb from 'duckdb';
 import * as fs from 'fs';
 import { promisify } from "util";
-import { Configuration } from './src/duckduckapi';
+import { DuckDBConfigurationSchema } from './src/duckduckapi';
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 let HASURA_CONFIGURATION_DIRECTORY = process.env["HASURA_CONFIGURATION_DIRECTORY"] as string | undefined;
-if (HASURA_CONFIGURATION_DIRECTORY === undefined || HASURA_CONFIGURATION_DIRECTORY.length === 0){
+if (HASURA_CONFIGURATION_DIRECTORY === undefined || HASURA_CONFIGURATION_DIRECTORY.length === 0) {
     HASURA_CONFIGURATION_DIRECTORY = ".";
 }
 
@@ -59,7 +59,7 @@ const determineType = (t: string): string => {
         case "HUGEINT":
             return "String";
         default:
-            if (t.startsWith("DECIMAL")){
+            if (t.startsWith("DECIMAL")) {
                 return "Float";
             }
             throw new NotSupported("Unsupported type", {});
@@ -68,34 +68,34 @@ const determineType = (t: string): string => {
 
 async function queryAll(con: any, query: any): Promise<any[]> {
     return new Promise((resolve, reject) => {
-        con.all(query, function(err: any, res: any){
-            if (err){
+        con.all(query, function (err: any, res: any) {
+            if (err) {
                 reject(err);
             } else {
                 resolve(res);
             }
         })
-        
+
     })
 };
 
 
-export async function generateConfig(db: duckdb.Database): Promise<Configuration> {
+export async function generateConfig(db: duckdb.Database): Promise<DuckDBConfigurationSchema> {
     const tableNames: string[] = [];
-    const tableAliases: {[k: string]: string} = {};
+    const tableAliases: { [k: string]: string } = {};
     const objectTypes: { [k: string]: ObjectType } = {};
     const tables = await queryAll(db.connect(), "SHOW ALL TABLES");
-    for (let table of tables){
+    for (let table of tables) {
         const tableName = table.name; // `${table.database}_${table.schema}_${table.name}`;
         const aliasName = `${table.database}.${table.schema}.${table.name}`;
         tableNames.push(tableName);
         tableAliases[tableName] = aliasName;
-        if (!objectTypes[tableName]){
+        if (!objectTypes[tableName]) {
             objectTypes[tableName] = {
                 fields: {}
             };
         }
-        for (let i = 0; i < table.column_names.length; i++){
+        for (let i = 0; i < table.column_names.length; i++) {
             objectTypes[tableName]['fields'][table.column_names[i]] = {
                 type: {
                     type: "named",
@@ -104,35 +104,12 @@ export async function generateConfig(db: duckdb.Database): Promise<Configuration
             }
         }
     }
-    const res: Configuration = {
-        config: {
-            collection_names: tableNames,
-            collection_aliases: tableAliases,
-            object_types: objectTypes,
-            functions: [{
-                name: "Hello",
-                arguments: {
-                   _headers: {
-                    description: 'oauth2 headers',
-                    type: {
-                        type: 'array',
-                        element_type: {
-                            type: 'named',
-                            name: 'String'
-                        }
-                    }
-                   } 
-                },
-                result_type: {
-                    type: "named",
-                    name: "String"
-                },
-                description: "hello function"
-            }],
-            procedures: []
-        }
+    const res: DuckDBConfigurationSchema = {
+        collection_names: tableNames,
+        collection_aliases: tableAliases,
+        object_types: objectTypes,
+        functions: [],
+        procedures: []
     };
-    console.log(res);
     return Promise.resolve(res);
 }
-

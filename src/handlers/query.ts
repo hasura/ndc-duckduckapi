@@ -11,9 +11,8 @@ import {
 import { Configuration, State } from "../duckduckapi";
 const SqlString = require("sqlstring-sqlite");
 import { MAX_32_INT } from "../constants";
-// import { format } from "sql-formatter";
-// import { helloWorld } from "../stub.functions";
 import { functions } from "../stub.functions";
+import { executeQuery } from "../lambda-sdk/execution";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -232,7 +231,7 @@ function build_query(
   },
   collection_aliases: {[k: string]: string}
 ): SQLQuery {
-  if (!config.config) {
+  if (!config.duckdbConfig) {
     throw new Forbidden("Must supply config", {});
   }
   let sql = "";
@@ -262,7 +261,7 @@ function build_query(
           break;
         case "relationship":
           let relationship_collection = query_request.collection_relationships[field_value.relationship].target_collection;
-          let relationship_collection_alias = config.config.collection_aliases[relationship_collection];
+          let relationship_collection_alias = config.duckdbConfig.collection_aliases[relationship_collection];
           collect_rows.push(
             `COALESCE((
               ${
@@ -293,7 +292,7 @@ function build_query(
   if (path.length > 1 && relationship_key !== null) {
     let relationship = query_request.collection_relationships[relationship_key];
     let parent_alias = path.slice(0, -1).join("_");
-    let relationship_alias = config.config.collection_aliases[relationship.target_collection];
+    let relationship_alias = config.duckdbConfig.collection_aliases[relationship.target_collection];
     from_sql = `${relationship_alias} as ${escape_double(collection_alias)}`;
     where_conditions.push(
       ...Object.entries(relationship.column_mapping).map(([from, to]) => {
@@ -305,10 +304,10 @@ function build_query(
   const filter_joins: string[] = [];
 
   if (query.predicate) {
-    where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, args, variables, collection_alias, config.config.collection_aliases)})`);
+    where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, args, variables, collection_alias, config.duckdbConfig.collection_aliases)})`);
   }
 
-  if (query.order_by && config.config) {
+  if (query.order_by && config.duckdbConfig) {
     let order_elems: string[] = [];
     for (let elem of query.order_by.elements) {
       switch (elem.target.type) {
@@ -394,15 +393,15 @@ export async function plan_queries(
   configuration: Configuration,
   query: QueryRequest
 ): Promise<SQLQuery[]> {
-  if (configuration.config === null || configuration.config === undefined) {
+  if (configuration.duckdbConfig === null || configuration.duckdbConfig === undefined) {
     throw new Forbidden("Connector is not properly configured", {});
   }
-  let collection_alias: string = configuration.config.collection_aliases[query.collection];
+  let collection_alias: string = configuration.duckdbConfig.collection_aliases[query.collection];
   let query_plan: SQLQuery[];
   if (query.variables) {
     let promises = query.variables.map((varSet) => {
       let query_variables: QueryVariables = varSet;
-      if (configuration.config){
+      if (configuration.duckdbConfig){
       return build_query(
         configuration,
         query,
@@ -414,7 +413,7 @@ export async function plan_queries(
         [],
         null,
         query.collection_relationships,
-        configuration.config.collection_aliases
+        configuration.duckdbConfig.collection_aliases
       );
       } else {
         throw new Forbidden("Config must be defined", {});
@@ -433,7 +432,7 @@ export async function plan_queries(
       [],
       null,
       query.collection_relationships,
-      configuration.config.collection_aliases
+      configuration.duckdbConfig.collection_aliases
     );
     query_plan = [promise];
   }
@@ -468,25 +467,14 @@ async function perform_query(
   return response;
 }
 
-function is_query_function(query: QueryRequest, configuration: Configuration): boolean {
-  if (configuration.config) {
-    return configuration.config.functions.some(func => func.name === query.collection);
-  };
-  return false;
-}
-
-async function perform_query_function(state: State, query: QueryRequest) {
-  return functions[query.collection]()
-}
-
 export async function do_query(
   configuration: Configuration,
   state: State,
   query: QueryRequest
 ): Promise<QueryResponse> {
   console.log(query);
-  if (is_query_function(query, configuration)) {
-    return await perform_query_function(state, query);
+  if (configuration.functionsSchema.functions[query.collection]) {
+    return await executeQuery(query, configuration.functionsSchema, configuration.runtimeFunctions);
   } else {
     let query_plans = await plan_queries(configuration, query);
     return await perform_query(state, query_plans);
