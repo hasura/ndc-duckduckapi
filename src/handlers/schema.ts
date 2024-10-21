@@ -4,13 +4,6 @@ import { SCALAR_TYPES } from "../constants";
 import { getNdcSchema } from "../lambda-sdk/schema";
 
 export function do_get_schema(configuration: Configuration): SchemaResponse {
-    /** TODO
-     * 
-    - Get the user to write a duckdb schema file
-    - Get the user to write some functions
-     * 
-     * 
-     */
     const duckdbconfig = configuration.duckdbConfig;
 
     if (!duckdbconfig){

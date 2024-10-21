@@ -73,20 +73,15 @@ async function createDuckDBFile(schema: string): Promise<void> {
 
 export interface duckduckapi {
   dbSchema: string
-  loaderJob(db: duckdb.Database): void
   functionsFilePath: string
 }
 
 export async function makeConnector(dda: duckduckapi): Promise<Connector<Configuration, State>> {
   
-  /*
-   TODO: create the db and load the DB path as a global variable
-   Create the configuration object
+  /**
+   * Create the db and load the DB path as a global variable
   */
   await createDuckDBFile(dda.dbSchema);
-
-  // spawn loaderjob execution on a cron
-  dda.loaderJob(db);
 
   const connector: Connector<Configuration, State> = {
     /**
@@ -96,7 +91,8 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
      */
 
     parseConfiguration: async function (configurationDir: string): Promise<Configuration> {
-      // Load DuckDB configuration
+
+      // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
 
       // Load functions configuration
