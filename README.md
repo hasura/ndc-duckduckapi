@@ -30,9 +30,7 @@ Ofcourse, the tradeoff is that the data will only be eventually consistent becau
 
 ## How to build an API integration
 
-1. Edit the schema
-2. Edit the loader.ts file
-3. Add to the functions.ts file
+_TODO:_
 
 To test, run the ts connector and refresh the supergraph project (step 3 onwards in the Get Started above).
 
