@@ -15,18 +15,29 @@ Ofcourse, the tradeoff is that the data will only be eventually consistent becau
 ## Get started
 
 1. Clone this repo
-2. Setup: `npm i &&`
-3. Run: `HASURA_CONNECTOR_PORT=9094 ts-node ./src/index.ts serve --configuration=.`
-4. Add to your DDN project:
-  ```
-  $> ddn supergraph init new-project
-  $> ddn connector-link add myapi --configure-host http://local.hasura.dev:9094
-  $> ddn models add myapi '*'
-  $> ddn commands add myapi '*'
-  $> ddn supergraph build local
-  $> ddn run docker-start
-  $> ddn console --local
-  ```
+2. Setup: `npm i`
+3. Run: `HASURA_SERVICE_TOKEN_SECRET=secrettoken HASURA_CONNECTOR_PORT=9094 npx ts-node ./src/index.ts serve --configuration=.`
+4. remove `duck.db` and `duck.db.wal` from `.gitignore` if you'd like
+5. Add to your DDN project:
+```bash
+ddn supergraph init new-project
+ddn connector-link add myapi --configure-host http://local.hasura.dev:9094 --configure-connector-token secrettoken
+cat <<EOF >> app/metadata/myapi.hml
+  argumentPresets:
+    - argument: headers
+      value:
+        httpHeaders:
+          forward:
+            - "*"
+          additional: {}
+EOF
+ddn connector-link update myapi
+ddn models add myapi '*'
+ddn commands add myapi '*'
+ddn supergraph build local
+ddn run docker-start
+ddn console --local
+```
 
 ## How to build an API integration
 

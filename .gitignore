@@ -6,3 +6,6 @@ config.json
 TMP.md
 chinook.db
 chinook.db.wal
+duck.db
+duck.db.wal
+
