@@ -15,8 +15,11 @@ import {
 
 import path from "node:path"
 import { FunctionsSchema, getNdcSchema, printRelaxedTypesWarning } from "./lambda-sdk/schema";
+// import { FunctionsSchema, getNdcSchema, printRelaxedTypesWarning } from '@hasura/ndc-lambda-sdk/schema';
 import { deriveSchema, printCompilerDiagnostics, printFunctionIssues } from "./lambda-sdk/inference";
+// import { deriveSchema, printCompilerDiagnostics, printFunctionIssues } from '@hasura/ndc-lambda-sdk/inference';
 import { RuntimeFunctions, executeMutation, executeQuery } from "./lambda-sdk/execution";
+// import { RuntimeFunctions, executeMutation, executeQuery } from '@hasura/ndc-lambda-sdk/execution';
 
 import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
 import { do_get_schema } from "./handlers/schema";
