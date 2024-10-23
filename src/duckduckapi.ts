@@ -12,6 +12,7 @@ import {
     Connector,
     Forbidden,
 } from "@hasura/ndc-sdk-typescript";
+import { JSONValue } from '@hasura/ndc-lambda-sdk';
 
 import path from "node:path"
 import { FunctionsSchema, getNdcSchema, printRelaxedTypesWarning } from "./lambda-sdk/schema";
@@ -276,4 +277,13 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
   };
 
   return Promise.resolve(connector);
+}
+
+export function getTokensFromHeader(headers: JSONValue, service: string): {access_token: string | null, refresh_token: string | null}  {
+  const oauthServices = headers.value as any;
+  const decodedServices = Buffer.from(oauthServices['x-hasura-oauth-services'] as string, 'base64').toString('utf-8');
+  const serviceTokens = JSON.parse(decodedServices);
+  const access_token = serviceTokens[service]?.access_token;
+  const refresh_token = serviceTokens[service]?.refresh_token;
+  return {access_token, refresh_token};
 }

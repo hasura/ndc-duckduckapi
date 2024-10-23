@@ -1,5 +1,6 @@
 import { JSONValue } from '@hasura/ndc-lambda-sdk';
 import { CalendarSyncManager } from './google-calendar-sync';
+import { getTokensFromHeader } from './duckduckapi';
 
 export let loaderStatus: string = 'stopped';
 
@@ -11,11 +12,18 @@ export let loaderStatus: string = 'stopped';
  */
 export async function __dda_loader_init(headers: JSONValue): Promise<string> {
 
-    console.log(JSON.stringify(headers.value));
+    const oauthServices = headers.value as any;
+    const {access_token} = getTokensFromHeader(headers, 'google-calendar');
+
+    if (!access_token) {
+      console.log(headers.value);
+      loaderStatus = 'google-calendar key not found in oauth services. Login to google-calendar?';
+      return loaderStatus;
+    }
 
     const syncManager = new CalendarSyncManager(
-      headers.value['google-calendar'].token,
-      1 // sync every 5 minutes
+      access_token,
+      1 // sync every minute
     );
     const result = await syncManager.test();
     
