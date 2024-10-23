@@ -1,25 +1,37 @@
 import {
-    SchemaResponse,
-    ObjectType,
-    FunctionInfo,
-    ProcedureInfo,
-    QueryRequest,
-    QueryResponse,
-    MutationRequest,
-    MutationResponse,
-    Capabilities,
-    ExplainResponse,
-    Connector,
-    Forbidden,
+  SchemaResponse,
+  ObjectType,
+  FunctionInfo,
+  ProcedureInfo,
+  QueryRequest,
+  QueryResponse,
+  MutationRequest,
+  MutationResponse,
+  Capabilities,
+  ExplainResponse,
+  Connector,
+  Forbidden,
 } from "@hasura/ndc-sdk-typescript";
-import { JSONValue } from '@hasura/ndc-lambda-sdk';
+import { JSONValue } from "@hasura/ndc-lambda-sdk";
 
-import path from "node:path"
-import { FunctionsSchema, getNdcSchema, printRelaxedTypesWarning } from "./lambda-sdk/schema";
+import path from "node:path";
+import {
+  FunctionsSchema,
+  getNdcSchema,
+  printRelaxedTypesWarning,
+} from "./lambda-sdk/schema";
 // import { FunctionsSchema, getNdcSchema, printRelaxedTypesWarning } from '@hasura/ndc-lambda-sdk/schema';
-import { deriveSchema, printCompilerDiagnostics, printFunctionIssues } from "./lambda-sdk/inference";
+import {
+  deriveSchema,
+  printCompilerDiagnostics,
+  printFunctionIssues,
+} from "./lambda-sdk/inference";
 // import { deriveSchema, printCompilerDiagnostics, printFunctionIssues } from '@hasura/ndc-lambda-sdk/inference';
-import { RuntimeFunctions, executeMutation, executeQuery } from "./lambda-sdk/execution";
+import {
+  RuntimeFunctions,
+  executeMutation,
+  executeQuery,
+} from "./lambda-sdk/execution";
 // import { RuntimeFunctions, executeMutation, executeQuery } from '@hasura/ndc-lambda-sdk/execution';
 
 import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
@@ -29,9 +41,9 @@ import { do_query } from "./handlers/query";
 import { do_mutation } from "./handlers/mutation";
 import { readFileSync } from "fs";
 import * as duckdb from "duckdb";
-import { generateConfig } from "../generate-config";
+import { generateConfig } from "./generate-config";
 
-const DUCKDB_URL =  'duck.db'; // process.env["DUCKDB_URL"] as string || "duck.db";
+const DUCKDB_URL = "duck.db"; // process.env["DUCKDB_URL"] as string || "duck.db";
 export const db = new duckdb.Database(DUCKDB_URL);
 
 export type DuckDBConfigurationSchema = {
@@ -47,9 +59,9 @@ type CredentialSchema = {
 };
 
 export type Configuration = {
-  duckdbConfig: DuckDBConfigurationSchema
-  functionsSchema: FunctionsSchema
-  runtimeFunctions: RuntimeFunctions
+  duckdbConfig: DuckDBConfigurationSchema;
+  functionsSchema: FunctionsSchema;
+  runtimeFunctions: RuntimeFunctions;
 };
 
 export interface State {
@@ -58,30 +70,29 @@ export interface State {
 
 async function createDuckDBFile(schema: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    
     db.run(schema, (err) => {
       if (err) {
-        console.error('Error creating schema:', err);
+        console.error("Error creating schema:", err);
         reject(err);
       } else {
-        console.log('Schema created successfully');
+        console.log("Schema created successfully");
         resolve();
       }
     });
-
   });
 }
 
 export interface duckduckapi {
-  dbSchema: string
-  functionsFilePath: string
+  dbSchema: string;
+  functionsFilePath: string;
 }
 
-export async function makeConnector(dda: duckduckapi): Promise<Connector<Configuration, State>> {
-  
+export async function makeConnector(
+  dda: duckduckapi
+): Promise<Connector<Configuration, State>> {
   /**
    * Create the db and load the DB path as a global variable
-  */
+   */
   await createDuckDBFile(dda.dbSchema);
 
   const connector: Connector<Configuration, State> = {
@@ -91,8 +102,9 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
      * @param configuration
      */
 
-    parseConfiguration: async function (configurationDir: string): Promise<Configuration> {
-
+    parseConfiguration: async function (
+      configurationDir: string
+    ): Promise<Configuration> {
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
 
@@ -113,16 +125,18 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
       // Unfortunately this means we've typechecked everything twice, but that seems unavoidable without
       // implementing our own hot-reloading system instead of using ts-node-dev.
       if (runtimeFunctions !== undefined) {
-        const schemaResults = deriveSchema(require.resolve(dda.functionsFilePath));
+        const schemaResults = deriveSchema(
+          require.resolve(dda.functionsFilePath)
+        );
         printCompilerDiagnostics(schemaResults.compilerDiagnostics); // Should never have any of these, since we've already tried compiling the code above
         printFunctionIssues(schemaResults.functionIssues);
         printRelaxedTypesWarning(schemaResults.functionsSchema);
 
-        const config : Configuration = {
+        const config: Configuration = {
           duckdbConfig,
           functionsSchema: schemaResults.functionsSchema,
           runtimeFunctions,
-        }
+        };
         console.log(config);
         return config;
       }
@@ -137,8 +151,8 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
             objectTypes: {},
             scalarTypes: {},
           },
-          runtimeFunctions: {}
-        }
+          runtimeFunctions: {},
+        };
       }
     },
 
@@ -178,7 +192,9 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
      * from the NDC specification.
      * @param configuration
      */
-    getSchema: async function (configuration: Configuration): Promise<SchemaResponse> {
+    getSchema: async function (
+      configuration: Configuration
+    ): Promise<SchemaResponse> {
       return Promise.resolve(do_get_schema(configuration));
     },
 
@@ -279,11 +295,17 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
   return Promise.resolve(connector);
 }
 
-export function getTokensFromHeader(headers: JSONValue, service: string): {access_token: string | null, refresh_token: string | null}  {
+export function getTokensFromHeader(
+  headers: JSONValue,
+  service: string
+): { access_token: string | null; refresh_token: string | null } {
   const oauthServices = headers.value as any;
-  const decodedServices = Buffer.from(oauthServices['x-hasura-oauth-services'] as string, 'base64').toString('utf-8');
+  const decodedServices = Buffer.from(
+    oauthServices["x-hasura-oauth-services"] as string,
+    "base64"
+  ).toString("utf-8");
   const serviceTokens = JSON.parse(decodedServices);
   const access_token = serviceTokens[service]?.access_token;
   const refresh_token = serviceTokens[service]?.refresh_token;
-  return {access_token, refresh_token};
+  return { access_token, refresh_token };
 }
