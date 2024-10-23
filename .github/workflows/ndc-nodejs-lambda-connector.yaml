@@ -1,4 +1,4 @@
-name: "ndc-nodejs-lambda connector"
+name: "ndc-duckduckapi connector"
 on:
   pull_request:
     branches:
@@ -13,11 +13,11 @@ on:
 
 env:
   DOCKER_REGISTRY: ghcr.io
-  DOCKER_IMAGE_NAME: hasura/ndc-nodejs-lambda
+  DOCKER_IMAGE_NAME: hasura/ndc-duckduckapi
 
 jobs:
   build-npm:
-    name: Build ndc-lambda-sdk npm package
+    name: Build ndc-duckduckapi npm package
     defaults:
       run:
         working-directory: ./ndc-duckduckapi
@@ -35,7 +35,7 @@ jobs:
       - run: npm test
 
   publish-npm:
-    name: Publish ndc-lambda-sdk to npm
+    name: Publish ndc-duckduckapi to npm
     defaults:
       run:
         working-directory: ./ndc-duckduckapi
@@ -119,7 +119,7 @@ jobs:
           node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org
           cache: npm
-          cache-dependency-path: ./ndc-lambda-sdk/package-lock.json
+          cache-dependency-path: ./ndc-duckduckapi/package-lock.json
       - name: Build connector definition
         run: make build
       - uses: actions/upload-artifact@v4

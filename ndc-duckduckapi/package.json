@@ -1,8 +1,14 @@
 {
-  "name": "duckdb-sdk",
+  "name": "@hasura/ndc-duckduckapi",
   "version": "0.1.0",
-  "description": "",
+  "description": "SDK for the Hasura DDN DuckDuckAPI connector. Easily build a data API from any existing API by ETLing data into DuckDB.",
+  "author": "Hasura",
+  "license": "Apache-2.0",
   "main": "index.js",
+  "homepage": "https://github.com/hasura/ndc-duckduckapi#readme",
+  "bugs": {
+    "url": "https://github.com/hasura/ndc-duckduckapi/issues"
+  },
   "scripts": {
     "build": "tsc",
     "test": "true",
