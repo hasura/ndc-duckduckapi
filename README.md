@@ -16,9 +16,9 @@ Ofcourse, the tradeoff is that the data will only be eventually consistent becau
 
 1. Clone this repo
 2. Setup: `npm i`
-3. Run: `HASURA_SERVICE_TOKEN_SECRET=secrettoken HASURA_CONNECTOR_PORT=9094 npx ts-node ./src/index.ts serve --configuration=.`
-4. remove `duck.db` and `duck.db.wal` from `.gitignore` if you'd like
-5. Add to your DDN project:
+3. Run: `NODE_OPTIONS="--max-old-space-size=4096" HASURA_SERVICE_TOKEN_SECRET=secrettoken HASURA_CONNECTOR_PORT=9094 npx ts-node ./src/index.ts serve --configuration=.`
+4. Remove `duck.db` and `duck.db.wal` from `.gitignore` if you'd like
+5. Create a new DDN project using the duckduckapi connector:
 ```bash
 ddn supergraph init new-project
 ddn connector-link add myapi --configure-host http://local.hasura.dev:9094 --configure-connector-token secrettoken
