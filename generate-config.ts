@@ -58,10 +58,13 @@ const determineType = (t: string): string => {
             return "String";
         case "HUGEINT":
             return "String";
+        case "JSON":
+            return "JSON";
         default:
             if (t.startsWith("DECIMAL")) {
                 return "Float";
             }
+            console.log(t);
             throw new NotSupported("Unsupported type", {});
     }
 };

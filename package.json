@@ -16,6 +16,8 @@
     "commander": "^11.1.0",
     "cross-spawn": "^7.0.3",
     "duckdb": "^1.0.0",
+    "google-auth-library": "^9.14.2",
+    "googleapis": "^144.0.0",
     "p-limit": "^3.1.0",
     "sql-formatter": "^13.0.4",
     "sqlstring-sqlite": "^0.1.1",
