@@ -132,11 +132,6 @@ jobs:
         run: |
           echo "tagged_version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
         shell: bash
-      - uses: mindsers/changelog-reader-action@v2
-        id: changelog-reader
-        with:
-          version: ${{ steps.get-version.outputs.tagged_version }}
-          path: ./CHANGELOG.md
       - uses: softprops/action-gh-release@v1
         with:
           draft: false
