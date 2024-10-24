@@ -4,8 +4,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "ts-node index.ts serve --configuration=.",
-    "watch": "nodemon --watch  --exec ts-node index.ts serve --configuration=."
+    "start": "ndc-duckduckapi  host -f functions.ts -s schema.sql serve --configuration ./",
+    "watch": "ndc-duckduckapi  host -f functions.ts -s schema.sql --watch serve --configuration ./ --pretty-print-logs"
   },
   "dependencies": {
     "@hasura/ndc-lambda-sdk": "^1.8.0",

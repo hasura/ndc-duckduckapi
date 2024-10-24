@@ -8,6 +8,9 @@
   "bugs": {
     "url": "https://github.com/hasura/ndc-duckduckapi/issues"
   },
+  "bin": {
+    "ndc-duckduckapi": "bin/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "true",
