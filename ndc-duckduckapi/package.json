@@ -1,6 +1,6 @@
 {
   "name": "@hasura/ndc-duckduckapi",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "SDK for the Hasura DDN DuckDuckAPI connector. Easily build a data API from any existing API by ETLing data into DuckDB.",
   "author": "Hasura",
   "license": "Apache-2.0",
@@ -32,6 +32,5 @@
     "sql-formatter": "^13.0.4",
     "sqlstring-sqlite": "^0.1.1"
   },
-  "devDependencies": {
-  }
+  "devDependencies": {}
 }

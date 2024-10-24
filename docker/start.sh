@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 set -eu -o pipefail
 
 /scripts/package-restore.sh
@@ -10,4 +10,4 @@ cd /functions
 # are propagated properly. "npm start" does not propagate SIGTERM to the
 # actual started process
 START_CMD=$(jq -r ".scripts.start" "package.json")
-PATH=$PATH:/functions/node_modules/.bin exec $START_CMD
+NODE_OPTIONS="--max-old-space-size=4096" PATH=$PATH:/functions/node_modules/.bin exec $START_CMD
