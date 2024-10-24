@@ -1,8 +1,8 @@
-import { JSONValue } from '@hasura/ndc-lambda-sdk';
-import { CalendarSyncManager } from './google-calendar-sync';
-import { getTokensFromHeader } from './duckduckapi';
+import { JSONValue } from "@hasura/ndc-lambda-sdk";
+import { CalendarSyncManager } from "./google-calendar-sync";
+import { getTokensFromHeader } from "./duckduckapi";
 
-export let loaderStatus: string = 'stopped';
+export let loaderStatus: string = "stopped";
 
 /**
  * This is the loader function which will start loading data into duckdb.
@@ -11,34 +11,34 @@ export let loaderStatus: string = 'stopped';
  * $ddn.jobs.sample-loader.init
  */
 export async function __dda_loader_init(headers: JSONValue): Promise<string> {
+  const oauthServices = headers.value as any;
+  const { access_token } = getTokensFromHeader(headers, "google-calendar");
 
-    const oauthServices = headers.value as any;
-    const {access_token} = getTokensFromHeader(headers, 'google-calendar');
+  if (!access_token) {
+    console.log(headers.value);
+    loaderStatus =
+      "google-calendar key not found in oauth services. Login to google-calendar?";
+    return loaderStatus;
+  }
 
-    if (!access_token) {
-      console.log(headers.value);
-      loaderStatus = 'google-calendar key not found in oauth services. Login to google-calendar?';
-      return loaderStatus;
-    }
+  const syncManager = new CalendarSyncManager(
+    access_token,
+    1, // sync every minute
+  );
+  const result = await syncManager.test();
 
-    const syncManager = new CalendarSyncManager(
-      access_token,
-      1 // sync every minute
-    );
-    const result = await syncManager.test();
-    
-    if (!result) {
-      loaderStatus = result + '. Have you logged in to google-calendar?';
-    }
+  if (!result) {
+    loaderStatus = result + ". Have you logged in to google-calendar?";
+  }
 
-    syncManager.initialize();
-    loaderStatus = 'running';
-    process.on('SIGINT', async () => {
-        await syncManager.cleanup();
-        process.exit(0);
-    });
+  syncManager.initialize();
+  loaderStatus = "running";
+  process.on("SIGINT", async () => {
+    await syncManager.cleanup();
+    process.exit(0);
+  });
 
-    return result;
+  return result;
 }
 
 /**
@@ -50,19 +50,19 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
  *  @readonly
  * */
 export function __dda_loader_status(): string {
-    return loaderStatus;
+  return loaderStatus;
 }
 
 /** @readonly */
 export function hello(name: string, year: number): string {
-    return `Hello ${name}, welcome to ${year}`
+  return `Hello ${name}, welcome to ${year}`;
 }
 
 /** @readonly */
 export function bye(name: string): string {
-    return `Bye ${name}!`;
+  return `Bye ${name}!`;
 }
 
-export async function sendEmail (email: string): Promise<string> {
-    return `Email sent to: ${email}!`;
+export async function sendEmail(email: string): Promise<string> {
+  return `Email sent to: ${email}!`;
 }

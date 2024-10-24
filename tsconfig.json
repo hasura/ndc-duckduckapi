@@ -8,8 +8,5 @@
     "declarationMap": true,
     "stripInternal": true
   },
-  "include": [
-    "src/**/*",
-    "test/**/*"
-  ]
+  "include": ["src/**/*", "test/**/*"]
 }

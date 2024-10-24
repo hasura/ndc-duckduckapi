@@ -1,4 +1,5 @@
 # Hasura DuckDB Connector in Production
+
 We ship the DuckDB connectors as Docker images.
 
 You can look at the Dockerfile in the root of the repository to see how the image is built.

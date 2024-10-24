@@ -1,7 +1,7 @@
-import { google, calendar_v3 } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
-import {db} from './duckduckapi';
-import { readJsonConfigFile } from 'typescript';
+import { google, calendar_v3 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
+import { db } from "./duckduckapi";
+import { readJsonConfigFile } from "typescript";
 
 interface CalendarEvent {
   id: string;
@@ -16,7 +16,7 @@ interface CalendarEvent {
   status: string;
   location: string | null;
   recurring_event_id: string | null;
-  recurrence: string | null; 
+  recurrence: string | null;
   transparency: string | null;
   visibility: string | null;
   ical_uid: string;
@@ -32,7 +32,7 @@ interface CalendarEvent {
   sequence: number;
   event_type: string;
   calendar_id: string;
-  sync_status: 'active' | 'deleted';
+  sync_status: "active" | "deleted";
   last_synced: string;
   is_all_day: boolean;
 }
@@ -48,11 +48,11 @@ export class CalendarSyncManager {
 
   constructor(
     private accessToken: string,
-    private syncIntervalMinutes: number = 15
+    private syncIntervalMinutes: number = 15,
   ) {
     const auth = new OAuth2Client();
     auth.setCredentials({ access_token: accessToken });
-    this.calendar = google.calendar({ version: 'v3', auth });
+    this.calendar = google.calendar({ version: "v3", auth });
   }
 
   async test(): Promise<string> {
@@ -61,15 +61,16 @@ export class CalendarSyncManager {
 
     try {
       const response = await this.calendar.events.list({
-        calendarId: 'primary', 
-        maxResults: 1
+        calendarId: "primary",
+        maxResults: 1,
       });
       if (response.data.items) {
         console.log(response.data.items);
-        calendarAccessResult = 'Test fetch from calendar successful. Starting loader...'
-      }
-      else {
-        calendarAccessResult = 'No items received in test fetch. Starting loader anyway...'
+        calendarAccessResult =
+          "Test fetch from calendar successful. Starting loader...";
+      } else {
+        calendarAccessResult =
+          "No items received in test fetch. Starting loader anyway...";
       }
     } catch (error) {
       calendarAccessResult = String(error);
@@ -85,7 +86,6 @@ export class CalendarSyncManager {
   }
 
   private async startPeriodicSync(): Promise<void> {
-    
     // Perform initial sync
     await this.performIncrementalSync();
 
@@ -95,18 +95,17 @@ export class CalendarSyncManager {
         try {
           await this.performIncrementalSync();
         } catch (error) {
-          console.error('Periodic sync failed:', error);
+          console.error("Periodic sync failed:", error);
         }
       },
-      this.syncIntervalMinutes * 60 * 1000
+      this.syncIntervalMinutes * 60 * 1000,
     );
-
   }
 
-  async performIncrementalSync(calendarId: string = 'primary'): Promise<void> {
+  async performIncrementalSync(calendarId: string = "primary"): Promise<void> {
     console.log(`Starting incremental sync for calendar: ${calendarId}`);
     try {
-      await db.run('BEGIN TRANSACTION');
+      await db.run("BEGIN TRANSACTION");
 
       const syncState = await this.getSyncState(calendarId);
       let pageToken: string | undefined;
@@ -125,40 +124,39 @@ export class CalendarSyncManager {
         }
 
         pageToken = response.data.nextPageToken || undefined;
-        
+
         if (!pageToken && response.data.nextSyncToken) {
           await this.updateSyncState(calendarId, response.data.nextSyncToken);
         }
       } while (pageToken);
 
-      await db.run('COMMIT');
+      await db.run("COMMIT");
       console.log(`Completed incremental sync for calendar: ${calendarId}`);
     } catch (error) {
-      await db.run('ROLLBACK');
-      
+      await db.run("ROLLBACK");
+
       if (this.isInvalidSyncTokenError(error)) {
-        console.log('Sync token invalid, performing full sync');
+        console.log("Sync token invalid, performing full sync");
         await this.performFullSync(calendarId);
       } else {
-        console.log('Unable to fetch events. ' + error);
+        console.log("Unable to fetch events. " + error);
       }
     }
   }
 
   private async processSyncedEvents(
     events: calendar_v3.Schema$Event[],
-    calendarId: string
+    calendarId: string,
   ): Promise<void> {
     const timestamp = new Date().toISOString();
     const BATCH_SIZE = 1000;
     let batch: CalendarEvent[] = [];
 
     for (const event of events) {
-
       const formattedEvent = this.formatEventData(event, calendarId, timestamp);
 
-      if (event.status === 'cancelled') {
-        formattedEvent.sync_status = 'deleted';
+      if (event.status === "cancelled") {
+        formattedEvent.sync_status = "deleted";
       }
 
       batch.push(formattedEvent);
@@ -174,7 +172,10 @@ export class CalendarSyncManager {
     }
   }
 
-  private parseDateTime(dateTime: string | null | undefined, date: string | null | undefined): string {
+  private parseDateTime(
+    dateTime: string | null | undefined,
+    date: string | null | undefined,
+  ): string {
     if (dateTime) {
       return dateTime;
     } else if (date) {
@@ -187,83 +188,90 @@ export class CalendarSyncManager {
   private formatEventData(
     event: calendar_v3.Schema$Event,
     calendarId: string,
-    timestamp: string
+    timestamp: string,
   ): CalendarEvent {
     const isAllDay = Boolean(event.start?.date);
     return {
       id: event.id!,
-      summary: event.summary || '',
+      summary: event.summary || "",
       description: event.description || null,
       start: this.parseDateTime(event.start?.dateTime, event.start?.date),
       end: this.parseDateTime(event.end?.dateTime, event.end?.date),
       created: event.created || timestamp,
       updated: event.updated || timestamp,
-      creator_email: event.creator?.email || '',
-      organizer_email: event.organizer?.email || '',
-      status: event.status || '',
+      creator_email: event.creator?.email || "",
+      organizer_email: event.organizer?.email || "",
+      status: event.status || "",
       location: event.location || null,
       recurring_event_id: event.recurringEventId || null,
       recurrence: event.recurrence ? JSON.stringify(event.recurrence) : null,
       transparency: event.transparency || null,
       visibility: event.visibility || null,
-      ical_uid: event.iCalUID || '',
+      ical_uid: event.iCalUID || "",
       attendees: event.attendees ? JSON.stringify(event.attendees) : null,
       reminders: event.reminders ? JSON.stringify(event.reminders) : null,
-      conference_data: event.conferenceData ? JSON.stringify(event.conferenceData) : null,
+      conference_data: event.conferenceData
+        ? JSON.stringify(event.conferenceData)
+        : null,
       color_id: event.colorId || null,
-      original_start_time: event.originalStartTime ? 
-        this.parseDateTime(event.originalStartTime.dateTime, event.originalStartTime.date) : 
-        null,
-      extended_properties: event.extendedProperties ? JSON.stringify(event.extendedProperties) : null,
+      original_start_time: event.originalStartTime
+        ? this.parseDateTime(
+            event.originalStartTime.dateTime,
+            event.originalStartTime.date,
+          )
+        : null,
+      extended_properties: event.extendedProperties
+        ? JSON.stringify(event.extendedProperties)
+        : null,
       attachments: event.attachments ? JSON.stringify(event.attachments) : null,
       html_link: event.htmlLink || null,
       meeting_type: this.determineMeetingType(event),
       sequence: event.sequence || 0,
       event_type: this.determineEventType(event),
       calendar_id: calendarId,
-      sync_status: 'active',
+      sync_status: "active",
       last_synced: timestamp,
-      is_all_day: isAllDay
+      is_all_day: isAllDay,
     };
   }
 
   private escapeValue(value: any): string {
     if (value === null) {
-      return 'NULL';
+      return "NULL";
     }
-    if (typeof value === 'boolean') {
-      return value ? 'true' : 'false';
+    if (typeof value === "boolean") {
+      return value ? "true" : "false";
     }
-    if (typeof value === 'number') {
+    if (typeof value === "number") {
       return value.toString();
     }
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       // Handle JSON strings
-      if (value.startsWith('{') && value.endsWith('}')) {
+      if (value.startsWith("{") && value.endsWith("}")) {
         return `'${value.replace(/'/g, "''")}'::JSON`;
       }
       return `'${value.replace(/'/g, "''")}'`;
     }
-    return 'NULL';
+    return "NULL";
   }
 
   private async insertEventsBatch(events: CalendarEvent[]): Promise<void> {
-      if (events.length === 0) return;
-    
-      // Use a much smaller batch size to avoid parameter limits
-      const BATCH_SIZE = 1000; // This means 50 * 31 = 1550 parameters max per statement
-      
-      try {
-        // Process events in smaller chunks
-        for (let i = 0; i < events.length; i += BATCH_SIZE) {
-          const chunk = events.slice(i, i + BATCH_SIZE);
-          
-          // Create placeholders only for this chunk
-          const placeholders = chunk
-            .map(() => '(' + Array(31).fill('?').join(',') + ')')
-            .join(',');
-    
-          const stmt = db.prepare(`
+    if (events.length === 0) return;
+
+    // Use a much smaller batch size to avoid parameter limits
+    const BATCH_SIZE = 1000; // This means 50 * 31 = 1550 parameters max per statement
+
+    try {
+      // Process events in smaller chunks
+      for (let i = 0; i < events.length; i += BATCH_SIZE) {
+        const chunk = events.slice(i, i + BATCH_SIZE);
+
+        // Create placeholders only for this chunk
+        const placeholders = chunk
+          .map(() => "(" + Array(31).fill("?").join(",") + ")")
+          .join(",");
+
+        const stmt = db.prepare(`
             INSERT OR REPLACE INTO calendar_events (
               id,
               summary,
@@ -298,72 +306,71 @@ export class CalendarSyncManager {
               is_all_day
             ) VALUES ${placeholders}
           `);
-    
-          const values = chunk.flatMap(event => [
-            event.id,
-            event.summary,
-            event.description,
-            event.start,
-            event.end,
-            event.created,
-            event.updated,
-            event.creator_email,
-            event.organizer_email,
-            event.status,
-            event.location,
-            event.recurring_event_id,
-            event.recurrence,
-            event.transparency,
-            event.visibility,
-            event.ical_uid,
-            event.attendees,
-            event.reminders,
-            event.conference_data,
-            event.color_id,
-            event.original_start_time,
-            event.extended_properties,
-            event.attachments,
-            event.html_link,
-            event.meeting_type,
-            event.sequence,
-            event.event_type,
-            event.calendar_id,
-            event.sync_status,
-            event.last_synced,
-            event.is_all_day
-          ]); // .map(this.escapeValue);
-    
-          try {
-            await new Promise<void>((resolve, reject) => {
-              stmt.all(...values, (err: Error | null, rows) => {
-                if (err) {
-                  console.log(stmt.sql)
-                  console.log(err);
-                  console.log(values);
-                  reject(err);
-                  process.exit();
-                } else {
-                  console.log('Affected rows: ' + rows.length)
-                  resolve();
-                }
-              });
+
+        const values = chunk.flatMap((event) => [
+          event.id,
+          event.summary,
+          event.description,
+          event.start,
+          event.end,
+          event.created,
+          event.updated,
+          event.creator_email,
+          event.organizer_email,
+          event.status,
+          event.location,
+          event.recurring_event_id,
+          event.recurrence,
+          event.transparency,
+          event.visibility,
+          event.ical_uid,
+          event.attendees,
+          event.reminders,
+          event.conference_data,
+          event.color_id,
+          event.original_start_time,
+          event.extended_properties,
+          event.attachments,
+          event.html_link,
+          event.meeting_type,
+          event.sequence,
+          event.event_type,
+          event.calendar_id,
+          event.sync_status,
+          event.last_synced,
+          event.is_all_day,
+        ]); // .map(this.escapeValue);
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            stmt.all(...values, (err: Error | null, rows) => {
+              if (err) {
+                console.log(stmt.sql);
+                console.log(err);
+                console.log(values);
+                reject(err);
+                process.exit();
+              } else {
+                console.log("Affected rows: " + rows.length);
+                resolve();
+              }
             });
-          } catch (error) {
-            console.error(`Error inserting batch at index ${i}:`, error);
-            throw error; // Re-throw to trigger transaction rollback
-          }
+          });
+        } catch (error) {
+          console.error(`Error inserting batch at index ${i}:`, error);
+          throw error; // Re-throw to trigger transaction rollback
         }
-      } catch (error) {
-        console.error('Batch insert failed:', error);
-        throw error;
       }
-    }    
+    } catch (error) {
+      console.error("Batch insert failed:", error);
+      throw error;
+    }
+  }
 
-
-  async performFullSync(calendarId: string = 'primary'): Promise<void> {
+  async performFullSync(calendarId: string = "primary"): Promise<void> {
     console.log(`Starting full sync for calendar: ${calendarId}`);
     try {
-      await db.run('BEGIN TRANSACTION');
+      await db.run("BEGIN TRANSACTION");
 
       let pageToken: string | undefined;
       do {
@@ -374,7 +381,7 @@ export class CalendarSyncManager {
           timeMin: new Date(0).toISOString(),
           timeMax: new Date().toISOString(),
           singleEvents: true,
-          orderBy: 'startTime',
+          orderBy: "startTime",
         });
 
         if (response.data.items) {
@@ -382,27 +389,26 @@ export class CalendarSyncManager {
         }
 
         pageToken = response.data.nextPageToken || undefined;
-        
+
         if (!pageToken && response.data.nextSyncToken) {
           await this.updateSyncState(calendarId, response.data.nextSyncToken);
         }
       } while (pageToken);
 
-      await db.run('COMMIT');
+      await db.run("COMMIT");
       console.log(`Completed full sync for calendar: ${calendarId}`);
     } catch (error) {
-      await db.run('ROLLBACK');
+      await db.run("ROLLBACK");
       throw error;
     }
   }
 
   private async getSyncState(calendarId: string): Promise<SyncState | null> {
     const stmt = await db.prepare(
-      'SELECT sync_token, last_sync FROM sync_state WHERE calendar_id = ?'
+      "SELECT sync_token, last_sync FROM sync_state WHERE calendar_id = ?",
     );
     // Using callback style
     return new Promise((resolve, reject) => {
-
       stmt.all(calendarId, (err, rows) => {
         if (err) {
           console.error(err);
@@ -415,22 +421,26 @@ export class CalendarSyncManager {
 
         return resolve({
           sync_token: rows[0].sync_token,
-          last_sync: rows[0].last_sync
+          last_sync: rows[0].last_sync,
         });
       });
-  });
+    });
   }
 
-  private async updateSyncState(calendarId: string, syncToken: string): Promise<void> {
+  private async updateSyncState(
+    calendarId: string,
+    syncToken: string,
+  ): Promise<void> {
     const stmt = await db.prepare(
       `INSERT OR REPLACE INTO sync_state (calendar_id, sync_token, last_sync)
-       VALUES (?, ?, CURRENT_TIMESTAMP)`);
+       VALUES (?, ?, CURRENT_TIMESTAMP)`,
+    );
     stmt.all(calendarId, syncToken, (err, rows) => {
       if (err) {
         console.log(stmt.sql);
         console.log(err);
       } else {
-        console.log('Affected rows: ' + rows.length)
+        console.log("Affected rows: " + rows.length);
       }
     });
   }
@@ -441,19 +451,19 @@ export class CalendarSyncManager {
 
   private determineMeetingType(event: calendar_v3.Schema$Event): string {
     if (event.conferenceData) {
-      return event.location ? 'hybrid' : 'virtual';
+      return event.location ? "hybrid" : "virtual";
     }
-    return 'in-person';
+    return "in-person";
   }
 
   private determineEventType(event: calendar_v3.Schema$Event): string {
     if (event.recurringEventId) {
-      return 'recurring_instance';
+      return "recurring_instance";
     }
     if (event.recurrence) {
-      return 'recurring';
+      return "recurring";
     }
-    return 'single';
+    return "single";
   }
 
   async cleanup(): Promise<void> {

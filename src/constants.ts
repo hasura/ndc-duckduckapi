@@ -2,18 +2,18 @@ import { Capabilities, ScalarType } from "@hasura/ndc-sdk-typescript";
 import { JSONSchemaObject } from "@json-schema-tools/meta-schema";
 
 export const CAPABILITIES_RESPONSE: Capabilities = {
-    query: {
-      variables: {},
-      nested_fields: {}
-    },
-    mutation: {
-      transactional: null,
-      explain: null
-    },
-    relationships: {
-      order_by_aggregate: {},
-      relation_comparisons: {}
-    }
+  query: {
+    variables: {},
+    nested_fields: {},
+  },
+  mutation: {
+    transactional: null,
+    explain: null,
+  },
+  relationships: {
+    order_by_aggregate: {},
+    relation_comparisons: {},
+  },
 };
 export const MAX_32_INT: number = 2147483647;
 export const SCALAR_TYPES: { [key: string]: ScalarType } = {
@@ -28,7 +28,7 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     comparison_operators: {
       _eq: {
-        type: "equal"
+        type: "equal",
       },
       _gt: {
         type: "custom",
@@ -65,7 +65,7 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
           name: "Int",
         },
       },
-    }
+    },
   },
   Float: {
     aggregate_functions: {
@@ -78,7 +78,7 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
     },
     comparison_operators: {
       _eq: {
-        type: "equal"
+        type: "equal",
       },
       _gt: {
         type: "custom",
@@ -115,13 +115,13 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
           name: "Float",
         },
       },
-    }
+    },
   },
   String: {
     aggregate_functions: {},
     comparison_operators: {
       _eq: {
-        type: "equal"
+        type: "equal",
       },
       _like: {
         type: "custom",
@@ -172,17 +172,17 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
           name: "String",
         },
       },
-    }
+    },
   },
   Boolean: {
     aggregate_functions: {},
     comparison_operators: {
       _eq: {
-        type: "equal"
+        type: "equal",
       },
     },
-  }
+  },
 };
 export const DUCKDB_CONFIG = {
-  'custom_user_agent': 'hasura'
-}
+  custom_user_agent: "hasura",
+};

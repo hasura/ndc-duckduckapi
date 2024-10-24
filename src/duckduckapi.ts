@@ -1,21 +1,21 @@
 import {
-    SchemaResponse,
-    ObjectType,
-    FunctionInfo,
-    ProcedureInfo,
-    QueryRequest,
-    QueryResponse,
-    MutationRequest,
-    MutationResponse,
-    Capabilities,
-    ExplainResponse,
-    Connector,
-    Forbidden,
+  SchemaResponse,
+  ObjectType,
+  FunctionInfo,
+  ProcedureInfo,
+  QueryRequest,
+  QueryResponse,
+  MutationRequest,
+  MutationResponse,
+  Capabilities,
+  ExplainResponse,
+  Connector,
+  Forbidden,
 } from "@hasura/ndc-sdk-typescript";
-import { JSONValue } from '@hasura/ndc-lambda-sdk';
+import { JSONValue } from "@hasura/ndc-lambda-sdk";
 import { Registry } from "prom-client";
 
-import * as lambdaSdk from "@hasura/ndc-lambda-sdk/connector"
+import * as lambdaSdk from "@hasura/ndc-lambda-sdk/connector";
 
 import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
 import { do_get_schema } from "./handlers/schema";
@@ -24,7 +24,7 @@ import { perform_query, plan_queries } from "./handlers/query";
 import * as duckdb from "duckdb";
 import { generateConfig } from "../generate-config";
 
-const DUCKDB_URL =  'duck.db'; // process.env["DUCKDB_URL"] as string || "duck.db";
+const DUCKDB_URL = "duck.db"; // process.env["DUCKDB_URL"] as string || "duck.db";
 export const db = new duckdb.Database(DUCKDB_URL);
 
 export type DuckDBConfigurationSchema = {
@@ -40,41 +40,42 @@ type CredentialSchema = {
 };
 
 export type Configuration = lambdaSdk.Configuration & {
-  duckdbConfig: DuckDBConfigurationSchema
+  duckdbConfig: DuckDBConfigurationSchema;
 };
 
 export type State = lambdaSdk.State & {
   client: duckdb.Database;
-}
+};
 
 async function createDuckDBFile(schema: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    
     db.run(schema, (err) => {
       if (err) {
-        console.error('Error creating schema:', err);
+        console.error("Error creating schema:", err);
         reject(err);
       } else {
-        console.log('Schema created successfully');
+        console.log("Schema created successfully");
         resolve();
       }
     });
-
   });
 }
 
 export interface duckduckapi {
-  dbSchema: string
-  functionsFilePath: string
+  dbSchema: string;
+  functionsFilePath: string;
 }
 
-export async function makeConnector(dda: duckduckapi): Promise<Connector<Configuration, State>> {
-  
-  const lambdaSdkConnector = lambdaSdk.createConnector({ functionsFilePath: dda.functionsFilePath });
+export async function makeConnector(
+  dda: duckduckapi,
+): Promise<Connector<Configuration, State>> {
+  const lambdaSdkConnector = lambdaSdk.createConnector({
+    functionsFilePath: dda.functionsFilePath,
+  });
 
   /**
    * Create the db and load the DB path as a global variable
-  */
+   */
   await createDuckDBFile(dda.dbSchema);
 
   const connector: Connector<Configuration, State> = {
@@ -84,17 +85,19 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
      * @param configuration
      */
 
-    parseConfiguration: async function (configurationDir: string): Promise<Configuration> {
-
+    parseConfiguration: async function (
+      configurationDir: string,
+    ): Promise<Configuration> {
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
 
-      const config = await lambdaSdkConnector.parseConfiguration(configurationDir);
-      
+      const config =
+        await lambdaSdkConnector.parseConfiguration(configurationDir);
+
       return {
         ...config,
         duckdbConfig,
-      }
+      };
     },
 
     /**
@@ -108,8 +111,14 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
      * @param configuration
      * @param metrics
      */
-    async tryInitState(configuration: Configuration, metrics: Registry): Promise<State> {
-      const state = await lambdaSdkConnector.tryInitState(configuration, metrics);
+    async tryInitState(
+      configuration: Configuration,
+      metrics: Registry,
+    ): Promise<State> {
+      const state = await lambdaSdkConnector.tryInitState(
+        configuration,
+        metrics,
+      );
       return Promise.resolve({ ...state, client: db });
     },
 
@@ -131,7 +140,9 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
      * from the NDC specification.
      * @param configuration
      */
-    getSchema: async function (configuration: Configuration): Promise<SchemaResponse> {
+    getSchema: async function (
+      configuration: Configuration,
+    ): Promise<SchemaResponse> {
       const schema = await lambdaSdkConnector.getSchema(configuration);
       return do_get_schema(configuration.duckdbConfig, schema);
     },
@@ -148,7 +159,7 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
     queryExplain(
       configuration: Configuration,
       _: State,
-      request: QueryRequest
+      request: QueryRequest,
     ): Promise<ExplainResponse> {
       return do_explain(configuration, request);
     },
@@ -162,7 +173,7 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
     mutationExplain(
       configuration: Configuration,
       _: State,
-      request: MutationRequest
+      request: MutationRequest,
     ): Promise<ExplainResponse> {
       throw new Forbidden("Not implemented", {});
     },
@@ -179,7 +190,7 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
     async query(
       configuration: Configuration,
       state: State,
-      request: QueryRequest
+      request: QueryRequest,
     ): Promise<QueryResponse> {
       if (configuration.functionsSchema.functions[request.collection]) {
         return lambdaSdkConnector.query(configuration, state, request);
@@ -201,7 +212,7 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
     mutation(
       configuration: Configuration,
       state: State,
-      request: MutationRequest
+      request: MutationRequest,
     ): Promise<MutationResponse> {
       return lambdaSdkConnector.mutation(configuration, state, request);
     },
@@ -238,11 +249,17 @@ export async function makeConnector(dda: duckduckapi): Promise<Connector<Configu
   return Promise.resolve(connector);
 }
 
-export function getTokensFromHeader(headers: JSONValue, service: string): {access_token: string | null, refresh_token: string | null}  {
+export function getTokensFromHeader(
+  headers: JSONValue,
+  service: string,
+): { access_token: string | null; refresh_token: string | null } {
   const oauthServices = headers.value as any;
-  const decodedServices = Buffer.from(oauthServices['x-hasura-oauth-services'] as string, 'base64').toString('utf-8');
+  const decodedServices = Buffer.from(
+    oauthServices["x-hasura-oauth-services"] as string,
+    "base64",
+  ).toString("utf-8");
   const serviceTokens = JSON.parse(decodedServices);
   const access_token = serviceTokens[service]?.access_token;
   const refresh_token = serviceTokens[service]?.refresh_token;
-  return {access_token, refresh_token};
+  return { access_token, refresh_token };
 }

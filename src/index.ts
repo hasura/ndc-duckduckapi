@@ -1,5 +1,5 @@
-import {start} from "@hasura/ndc-sdk-typescript";
-import {makeConnector, duckduckapi, db} from "./duckduckapi";
+import { start } from "@hasura/ndc-sdk-typescript";
+import { makeConnector, duckduckapi, db } from "./duckduckapi";
 
 const calendar: duckduckapi = {
   dbSchema: `
@@ -43,10 +43,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
   last_sync TIMESTAMP
 );
     `,
-  functionsFilePath: './functions.ts'
+  functionsFilePath: "./functions.ts",
 };
 
 (async () => {
-    const connector = await makeConnector(calendar);
-    start(connector);  
+  const connector = await makeConnector(calendar);
+  start(connector);
 })();
