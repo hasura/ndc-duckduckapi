@@ -12,8 +12,8 @@ import { makeCommand } from "./cmdline";
 const program = makeCommand({
   serveAction: async (hostOpts, serveOpts) => {
     const connectorConfig: duckduckapi = {
-      dbSchema: readFileSync(path.join(__dirname, hostOpts.schema), "utf-8"),
-      functionsFilePath: path.resolve(__dirname, hostOpts.functions),
+      dbSchema: readFileSync(hostOpts.schema, "utf-8"),
+      functionsFilePath: hostOpts.functions
     };
     const connector = await makeConnector(connectorConfig);
 
