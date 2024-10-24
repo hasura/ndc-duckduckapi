@@ -4,7 +4,6 @@
   "description": "SDK for the Hasura DDN DuckDuckAPI connector. Easily build a data API from any existing API by ETLing data into DuckDB.",
   "author": "Hasura",
   "license": "Apache-2.0",
-  "main": "index.js",
   "homepage": "https://github.com/hasura/ndc-duckduckapi#readme",
   "bugs": {
     "url": "https://github.com/hasura/ndc-duckduckapi/issues"
@@ -21,31 +20,14 @@
     ".": "./dist/src/sdk.js"
   },
   "dependencies": {
-    "@hasura/ndc-lambda-sdk": "^1.8.0",
-    "@hasura/ndc-sdk-typescript": "^7.0.0",
-    "@hasura/ts-node-dev": "^2.1.0",
+    "@hasura/ndc-lambda-sdk": "^1.9.0",
     "@tsconfig/node20": "^20.1.4",
-    "commander": "^11.1.0",
-    "cross-spawn": "^7.0.3",
     "duckdb": "^1.0.0",
     "google-auth-library": "^9.14.2",
     "googleapis": "^144.0.0",
-    "p-limit": "^3.1.0",
     "sql-formatter": "^13.0.4",
-    "sqlstring-sqlite": "^0.1.1",
-    "ts-api-utils": "^1.3.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.5.4"
+    "sqlstring-sqlite": "^0.1.1"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.11",
-    "@types/chai-as-promised": "^7.1.8",
-    "@types/mocha": "^10.0.6",
-    "chai": "^4.3.7",
-    "chai-as-promised": "^7.1.1",
-    "mocha": "^10.2.0",
-    "node-emoji": "^2.1.3",
-    "node-postgres": "^0.6.2",
-    "typescript-json-schema": "^0.62.0"
   }
 }

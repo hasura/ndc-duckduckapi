@@ -4,13 +4,10 @@ import {
   ScalarType,
   ObjectType,
 } from "@hasura/ndc-sdk-typescript";
-import { Configuration } from "../duckduckapi";
+import { DuckDBConfigurationSchema } from "../duckduckapi";
 import { SCALAR_TYPES } from "../constants";
-import { getNdcSchema } from "../lambda-sdk/schema";
 
-export function do_get_schema(configuration: Configuration): SchemaResponse {
-  const duckdbconfig = configuration.duckdbConfig;
-
+export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functionsNDCSchema: SchemaResponse): SchemaResponse {
   if (!duckdbconfig) {
     throw new Error("Configuration is missing");
   }
@@ -27,9 +24,6 @@ export function do_get_schema(configuration: Configuration): SchemaResponse {
       });
     }
   });
-
-  // Now lets get the Function Schema
-  const functionsNDCSchema = getNdcSchema(configuration.functionsSchema);
 
   // Let's merge the scalar types from DuckDB and TS Lambda
   const mergedScalarTypes: { [key: string]: ScalarType } = { ...SCALAR_TYPES };

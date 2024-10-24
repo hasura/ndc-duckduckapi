@@ -72,7 +72,7 @@ export class CalendarSyncManager {
         "No items received in test fetch. Starting loader anyway...";
     }
     return calendarAccessResult;
-  } 
+  }
 
   async initialize(): Promise<void> {
     await this.startPeriodicSync();
