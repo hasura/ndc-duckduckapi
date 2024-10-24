@@ -2,6 +2,55 @@ import { JSONValue } from "@hasura/ndc-lambda-sdk";
 import { GoogleCalendar } from "@hasura/ndc-duckduckapi/services";
 import { getOAuthCredentialsFromHeader } from "@hasura/ndc-duckduckapi";
 
+/***********************************************************************************/
+/************************** BUILT-IN EXAMPLES **************************************/
+/***********************************************************************************/
+
+/* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
+const calendarLoaderState = {
+  state: 'stopped'
+}
+
+/**
+ * $ddn.jobs.calendar-loader.init
+ */
+export async function __dda_calendar_loader_init(headers: JSONValue): Promise<string> {
+
+  if (calendarLoaderState.state === "running") {
+    return calendarLoaderState.state;
+  }
+
+  let credentials;
+  credentials = getOAuthCredentialsFromHeader(headers);
+
+  if (!credentials || !credentials['google-calendar'] || !credentials['google-calendar'].access_token) {
+    console.log(credentials);
+    calendarLoaderState.state = `Error in getting the google-calendar oauth credentials. Login to google-calendar?`;
+    return calendarLoaderState.state;
+  }
+
+  const syncManager = new GoogleCalendar.syncManager (
+    credentials['google-calendar'].access_token,
+    1, // sync every minute
+    calendarLoaderState
+  );
+
+  return await syncManager.initialize();
+ 
+}
+
+/**
+ *  $ddn.jobs.calendar-loader.status
+ *
+ *  @readonly
+ * */
+export function __dda_calendar_loader_status(): string {
+  return calendarLoaderState.state;
+}
+
+/**********************************************************************************************/
+/***************************  Add your own loader  ********************************************/
+/**********************************************************************************************/
 
 const myLoaderState = {
   state: 'unimplemented'
@@ -15,7 +64,7 @@ const myLoaderState = {
  */
 export async function __dda_my_loader_init(headers: JSONValue): Promise<string> {
 
-  // If the loader is already running, return the current state
+  // If the loader is already running
   if (myLoaderState.state === "running") {
     return myLoaderState.state;
   }
@@ -54,7 +103,11 @@ export function __dda_my_loader_status(): string {
   return myLoaderState.state;
 }
 
+
+/*******************************************************************************************/
 /* Some other examples of custom actions you want to provide or APIs you want to wrap over */
+/*******************************************************************************************/
+
 /** @readonly */
 export function hello(name: string, year: number): string {
   return `Helloooo ${name}, welcome to ${year}`;
@@ -68,50 +121,3 @@ export function bye(name: string): string {
 export async function sendEmail(email: string): Promise<string> {
   return `Email sent to: ${email}!`;
 }
-
-
-/************************** BUILT-IN EXAMPLES ************************************* */
-
-/* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
-const calendarLoaderState = {
-  state: 'stopped'
-}
-
-/**
- * This is the loader function which will start loading data into duckdb.
- *  // Mark your functions with this annotation to see it in the console
- *  // Replace sample-loader to create your own unique name, eg: my-saas-loader, and to group it with the right job status method.
- * $ddn.jobs.calendar-loader.init
- */
-export async function __dda_calendar_loader_init(headers: JSONValue): Promise<string> {
-
-  if (calendarLoaderState.state === "running") {
-    return calendarLoaderState.state;
-  }
-
-  let credentials;
-  credentials = getOAuthCredentialsFromHeader(headers);
-
-  if (!credentials || !credentials['google-calendar'] || !credentials['google-calendar'].access_token) {
-    console.log(credentials);
-    calendarLoaderState.state = `Error in getting the google-calendar oauth credentials. Login to google-calendar?`;
-    return calendarLoaderState.state;
-  }
-
-  const syncManager = new GoogleCalendar.syncManager (
-    credentials['google-calendar'].access_token,
-    1, // sync every minute
-    calendarLoaderState
-  );
-
-  return await syncManager.initialize();
- 
-}
-
-/**
- *  @readonly
- * */
-export function __dda_calendar_loader_status(): string {
-  return calendarLoaderState.state;
-}
-
