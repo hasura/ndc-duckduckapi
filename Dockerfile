@@ -4,7 +4,7 @@ RUN apk add jq curl
 
 COPY /docker /scripts
 
-RUN /scripts/package-restore.sh
+RUN mkdir -p /functions && /scripts/package-restore.sh
 
 EXPOSE 8080
 
