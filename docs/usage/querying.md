@@ -22,7 +22,7 @@ Fetch all Albums where Album ID = 1
 
 ```graphql
 query Query {
-  duckdb_chinookMainAlbum(where: {albumId: {_eq: 1}}) {
+  duckdb_chinookMainAlbum(where: { albumId: { _eq: 1 } }) {
     albumId
     artistId
     title
@@ -34,7 +34,7 @@ Fetch all Albums order by Title
 
 ```graphql
 query Query {
-  duckdb_chinookMainAlbum(order_by: {title: Asc}) {
+  duckdb_chinookMainAlbum(order_by: { title: Asc }) {
     albumId
     artistId
     title
@@ -110,7 +110,7 @@ You can also filter across relationships as well:
 
 ```graphql
 query Query {
-  duckdb_chinookMainAlbum(where: {artist: {artistId: {_eq: 10}}}) {
+  duckdb_chinookMainAlbum(where: { artist: { artistId: { _eq: 10 } } }) {
     albumId
     artistId
     title
@@ -124,5 +124,5 @@ query Query {
 
 ### Additional Querying Capabilities that will be coming in the future
 
-* Aggregations
-* GroupBy
+- Aggregations
+- GroupBy

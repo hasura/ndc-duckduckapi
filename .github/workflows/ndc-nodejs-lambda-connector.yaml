@@ -6,7 +6,7 @@ on:
       - test-ci/**
   push:
     branches:
-      - 'main'
+      - "main"
       - test-ci/**
     tags:
       - v**
