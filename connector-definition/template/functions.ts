@@ -11,6 +11,11 @@ export let loaderStatus: string = "stopped";
  * $ddn.jobs.sample-loader.init
  */
 export async function __dda_loader_init(headers: JSONValue): Promise<string> {
+
+  if (loaderStatus === "running") {
+    return loaderStatus;
+  }
+
   let access_token: string | null = null;
   try {
     access_token = getTokensFromHeader(headers, "google-calendar").access_token;
@@ -30,10 +35,11 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
     access_token,
     1, // sync every minute
   );
-  const result = await syncManager.test();
 
-  if (!result) {
-    loaderStatus = result + ". Have you logged in to google-calendar?";
+  try {
+    loaderStatus = await syncManager.test();
+  } catch (error) {
+    loaderStatus = `Error in testing google-calendar access: ${error}. Have you logged in to google-calendar?`;
     return loaderStatus;
   }
 
@@ -45,7 +51,7 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
     process.exit(0);
   });
 
-  return result;
+  return loaderStatus;
 }
 
 /**
@@ -57,7 +63,6 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
  *  @readonly
  * */
 export function __dda_loader_status(): string {
-  console.log(loaderStatus);
   return loaderStatus;
 }
 
