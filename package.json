@@ -9,7 +9,7 @@
     "watch": "nodemon --watch \"src/**\" --ext \"ts,json\" --ignore \"src/**/*.spec.ts\" --exec \"ts-node src/index.ts serve --configuration=."
   },
   "dependencies": {
-    "@hasura/ndc-lambda-sdk": "^1.8.0",
+    "@hasura/ndc-lambda-sdk": "^1.9.0",
     "@hasura/ndc-sdk-typescript": "^7.0.0",
     "@hasura/ts-node-dev": "^2.1.0",
     "@tsconfig/node20": "^20.1.4",

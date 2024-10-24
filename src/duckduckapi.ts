@@ -15,7 +15,7 @@ import {
 import { JSONValue } from '@hasura/ndc-lambda-sdk';
 import { Registry } from "prom-client";
 
-import * as lambdaSdk from "./lambda-sdk/connector"
+import * as lambdaSdk from "@hasura/ndc-lambda-sdk/connector"
 
 import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
 import { do_get_schema } from "./handlers/schema";
