@@ -11,7 +11,6 @@ import {
 import { Configuration, State } from "../duckduckapi";
 const SqlString = require("sqlstring-sqlite");
 import { MAX_32_INT } from "../constants";
-import { executeQuery } from "../lambda-sdk/execution";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -451,7 +450,7 @@ async function do_all(con: any, query: SQLQuery): Promise<any[]> {
   });
 }
 
-async function perform_query(
+export async function perform_query(
   state: State,
   query_plans: SQLQuery[]
 ): Promise<QueryResponse> {
@@ -465,18 +464,3 @@ async function perform_query(
   con.close();
   return response;
 }
-
-export async function do_query(
-  configuration: Configuration,
-  state: State,
-  query: QueryRequest
-): Promise<QueryResponse> {
-  console.log(query);
-  if (configuration.functionsSchema.functions[query.collection]) {
-    return await executeQuery(query, configuration.functionsSchema, configuration.runtimeFunctions);
-  } else {
-    let query_plans = await plan_queries(configuration, query);
-    return await perform_query(state, query_plans);
-  }
-}
-
