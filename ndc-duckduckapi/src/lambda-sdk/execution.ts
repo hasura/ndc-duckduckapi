@@ -23,25 +23,25 @@ const FUNCTION_INVOCATION_INDEX_SPAN_ATTR_NAME =
 export async function executeQuery(
   queryRequest: sdk.QueryRequest,
   functionsSchema: schema.FunctionsSchema,
-  runtimeFunctions: RuntimeFunctions,
+  runtimeFunctions: RuntimeFunctions
 ): Promise<sdk.QueryResponse> {
   const functionName = queryRequest.collection;
 
   const functionDefinition = functionsSchema.functions[functionName];
   if (functionDefinition === undefined)
     throw new sdk.BadRequest(
-      `Couldn't find function '${functionName}' in schema.`,
+      `Couldn't find function '${functionName}' in schema.`
     );
   if (functionDefinition.ndcKind !== schema.FunctionNdcKind.Function) {
     throw new sdk.BadRequest(
-      `'${functionName}' is a '${functionDefinition.ndcKind}' and cannot be queried as a ${schema.FunctionNdcKind.Function}.`,
+      `'${functionName}' is a '${functionDefinition.ndcKind}' and cannot be queried as a ${schema.FunctionNdcKind.Function}.`
     );
   }
 
   const runtimeFunction = runtimeFunctions[functionName];
   if (runtimeFunction === undefined)
     throw new sdk.InternalServerError(
-      `Couldn't find '${functionName}' function exported from hosted functions module.`,
+      `Couldn't find '${functionName}' function exported from hosted functions module.`
     );
 
   const spanAttributes = { [FUNCTION_NAME_SPAN_ATTR_NAME]: functionName };
@@ -53,19 +53,19 @@ export async function executeQuery(
       (queryRequest.variables ?? [{}]).map((variables) => {
         const resolvedArgs = resolveArgumentValues(
           queryRequest.arguments,
-          variables,
+          variables
         );
         return prepareArguments(
           resolvedArgs,
           functionDefinition,
-          functionsSchema.objectTypes,
+          functionsSchema.objectTypes
         );
       }),
-    spanAttributes,
+    spanAttributes
   );
 
   const parallelLimit = pLimit(
-    functionDefinition.parallelDegree ?? DEFAULT_PARALLEL_DEGREE,
+    functionDefinition.parallelDegree ?? DEFAULT_PARALLEL_DEGREE
   );
   const functionInvocations: Promise<sdk.RowSet>[] =
     functionInvocationPreparedArgs.map(
@@ -83,7 +83,7 @@ export async function executeQuery(
               const result = await invokeFunction(
                 runtimeFunction,
                 invocationPreparedArgs,
-                functionName,
+                functionName
               );
 
               return withActiveSpan(
@@ -94,14 +94,14 @@ export async function executeQuery(
                     result,
                     functionDefinition.resultType,
                     queryRequest.query,
-                    functionsSchema.objectTypes,
+                    functionsSchema.objectTypes
                   ),
-                invocationSpanAttrs,
+                invocationSpanAttrs
               );
             },
-            invocationSpanAttrs,
+            invocationSpanAttrs
           );
-        }),
+        })
     );
 
   return await Promise.all(functionInvocations);
@@ -110,11 +110,11 @@ export async function executeQuery(
 export async function executeMutation(
   mutationRequest: sdk.MutationRequest,
   functionsSchema: schema.FunctionsSchema,
-  runtimeFunctions: RuntimeFunctions,
+  runtimeFunctions: RuntimeFunctions
 ): Promise<sdk.MutationResponse> {
   if (mutationRequest.operations.length > 1)
     throw new sdk.NotSupported(
-      "Transactional mutations (multiple operations) are not supported",
+      "Transactional mutations (multiple operations) are not supported"
     );
   if (mutationRequest.operations.length <= 0)
     throw new sdk.BadRequest("One mutation operation must be provided");
@@ -123,7 +123,7 @@ export async function executeMutation(
   const result = await executeMutationOperation(
     mutationOperation,
     functionsSchema,
-    runtimeFunctions,
+    runtimeFunctions
   );
 
   return {
@@ -134,18 +134,18 @@ export async function executeMutation(
 async function executeMutationOperation(
   mutationOperation: sdk.MutationOperation,
   functionsSchema: schema.FunctionsSchema,
-  runtimeFunctions: RuntimeFunctions,
+  runtimeFunctions: RuntimeFunctions
 ): Promise<sdk.MutationOperationResults> {
   const functionName = mutationOperation.name;
 
   const functionDefinition = functionsSchema.functions[functionName];
   if (functionDefinition === undefined)
     throw new sdk.BadRequest(
-      `Couldn't find procedure '${functionName}' in schema.`,
+      `Couldn't find procedure '${functionName}' in schema.`
     );
   if (functionDefinition.ndcKind !== schema.FunctionNdcKind.Procedure) {
     throw new sdk.BadRequest(
-      `'${functionName}' is a '${functionDefinition.ndcKind}' and cannot be queried as a ${schema.FunctionNdcKind.Procedure}.`,
+      `'${functionName}' is a '${functionDefinition.ndcKind}' and cannot be queried as a ${schema.FunctionNdcKind.Procedure}.`
     );
   }
 
@@ -154,7 +154,7 @@ async function executeMutationOperation(
   const runtimeFunction = runtimeFunctions[functionName];
   if (runtimeFunction === undefined)
     throw new sdk.InternalServerError(
-      `Couldn't find ${functionName} function exported from hosted functions module.`,
+      `Couldn't find ${functionName} function exported from hosted functions module.`
     );
 
   const preparedArgs = withActiveSpan(
@@ -164,15 +164,15 @@ async function executeMutationOperation(
       prepareArguments(
         mutationOperation.arguments,
         functionDefinition,
-        functionsSchema.objectTypes,
+        functionsSchema.objectTypes
       ),
-    spanAttributes,
+    spanAttributes
   );
 
   const result = await invokeFunction(
     runtimeFunction,
     preparedArgs,
-    functionName,
+    functionName
   );
 
   const reshapedResult = withActiveSpan(
@@ -184,9 +184,9 @@ async function executeMutationOperation(
         functionDefinition.resultType,
         [],
         mutationOperation.fields ?? { type: "scalar" },
-        functionsSchema.objectTypes,
+        functionsSchema.objectTypes
       ),
-    spanAttributes,
+    spanAttributes
   );
 
   return {
@@ -197,7 +197,7 @@ async function executeMutationOperation(
 
 function resolveArgumentValues(
   args: Record<string, sdk.Argument>,
-  variableValues: Record<string, unknown>,
+  variableValues: Record<string, unknown>
 ): Record<string, unknown> {
   return mapObjectValues(args, (argument, argumentName) => {
     switch (argument.type) {
@@ -206,7 +206,7 @@ function resolveArgumentValues(
       case "variable":
         if (!(argument.name in variableValues))
           throw new sdk.BadRequest(
-            `Expected value for variable '${argument.name}' not provided for argument ${argumentName}.`,
+            `Expected value for variable '${argument.name}' not provided for argument ${argumentName}.`
           );
 
         return variableValues[argument.name];
@@ -219,15 +219,15 @@ function resolveArgumentValues(
 export function prepareArguments(
   args: Record<string, unknown>,
   functionDefinition: schema.FunctionDefinition,
-  objectTypes: schema.ObjectTypeDefinitions,
+  objectTypes: schema.ObjectTypeDefinitions
 ): unknown[] {
   return functionDefinition.arguments.map((argDef) =>
     coerceArgumentValue(
       args[argDef.argumentName],
       argDef.type,
       [argDef.argumentName],
-      objectTypes,
-    ),
+      objectTypes
+    )
   );
 }
 
@@ -235,21 +235,23 @@ function coerceArgumentValue(
   value: unknown,
   type: schema.TypeReference,
   valuePath: string[],
-  objectTypeDefinitions: schema.ObjectTypeDefinitions,
+  objectTypeDefinitions: schema.ObjectTypeDefinitions
 ): unknown {
   switch (type.type) {
     case "array":
       if (!isArray(value))
         throw new sdk.BadRequest(
-          `Unexpected value in function arguments. Expected an array at '${valuePath.join(".")}'.`,
+          `Unexpected value in function arguments. Expected an array at '${valuePath.join(
+            "."
+          )}'.`
         );
       return value.map((element, index) =>
         coerceArgumentValue(
           element,
           type.elementType,
           [...valuePath, `[${index}]`],
-          objectTypeDefinitions,
-        ),
+          objectTypeDefinitions
+        )
       );
 
     case "nullable":
@@ -268,7 +270,7 @@ function coerceArgumentValue(
           value,
           type.underlyingType,
           valuePath,
-          objectTypeDefinitions,
+          objectTypeDefinitions
         );
       }
     case "named":
@@ -281,11 +283,13 @@ function coerceArgumentValue(
         const objectTypeDefinition = objectTypeDefinitions[type.name];
         if (!objectTypeDefinition)
           throw new sdk.InternalServerError(
-            `Couldn't find object type '${type.name}' in the schema`,
+            `Couldn't find object type '${type.name}' in the schema`
           );
         if (value === null || typeof value !== "object") {
           throw new sdk.BadRequest(
-            `Unexpected value in function arguments. Expected an object at '${valuePath.join(".")}'.`,
+            `Unexpected value in function arguments. Expected an object at '${valuePath.join(
+              "."
+            )}'.`
           );
         }
         return Object.fromEntries(
@@ -299,10 +303,10 @@ function coerceArgumentValue(
                 propValue,
                 propDef.type,
                 [...valuePath, propDef.propertyName],
-                objectTypeDefinitions,
+                objectTypeDefinitions
               ),
             ];
-          }),
+          })
         );
       }
     default:
@@ -313,7 +317,7 @@ function coerceArgumentValue(
 async function invokeFunction(
   func: Function,
   preparedArgs: unknown[],
-  functionName: string,
+  functionName: string
 ): Promise<unknown> {
   try {
     return await withActiveSpan(
@@ -332,7 +336,7 @@ async function invokeFunction(
         }
         return result;
       },
-      { [FUNCTION_NAME_SPAN_ATTR_NAME]: functionName },
+      { [FUNCTION_NAME_SPAN_ATTR_NAME]: functionName }
     );
   } catch (e) {
     if (e instanceof sdk.ConnectorError) {
@@ -340,16 +344,16 @@ async function invokeFunction(
     } else if (e instanceof Error) {
       throw new sdk.InternalServerError(
         `Error encountered when invoking function '${functionName}'`,
-        getErrorDetails(e),
+        getErrorDetails(e)
       );
     } else if (typeof e === "string") {
       throw new sdk.InternalServerError(
         `Error encountered when invoking function '${functionName}'`,
-        { message: e },
+        { message: e }
       );
     } else {
       throw new sdk.InternalServerError(
-        `Error encountered when invoking function '${functionName}'`,
+        `Error encountered when invoking function '${functionName}'`
       );
     }
   }
@@ -402,7 +406,7 @@ function reshapeResultUsingFunctionCallingConvention(
   functionResultValue: unknown,
   functionResultType: schema.TypeReference,
   query: sdk.Query,
-  objectTypes: schema.ObjectTypeDefinitions,
+  objectTypes: schema.ObjectTypeDefinitions
 ): sdk.RowSet {
   if (query.aggregates)
     throw new sdk.NotSupported("Query aggregates are not supported");
@@ -439,23 +443,23 @@ function reshapeResultUsingFunctionCallingConvention(
               functionResultType,
               [fieldName],
               field.fields ?? { type: "scalar" },
-              objectTypes,
+              objectTypes
             );
           } else {
             throw new sdk.BadRequest(
-              `Unknown column '${field.column}' used in root query field`,
+              `Unknown column '${field.column}' used in root query field`
             );
           }
 
         case "relationship":
           throw new sdk.NotSupported(
-            `Field '${fieldName}' is a relationship field, which is unsupported.'`,
+            `Field '${fieldName}' is a relationship field, which is unsupported.'`
           );
 
         default:
           return unreachable(field["type"]);
       }
-    },
+    }
   );
 
   return {
@@ -469,14 +473,16 @@ export function reshapeResultUsingFieldSelection(
   type: schema.TypeReference,
   valuePath: string[],
   fieldSelection: FieldSelection,
-  objectTypes: schema.ObjectTypeDefinitions,
+  objectTypes: schema.ObjectTypeDefinitions
 ): unknown {
   switch (type.type) {
     case "array":
       if (!isArray(value))
         // @ts-ignore
         throw new sdk.InternalServerError(
-          `Expected an array, but received '${value === null ? "null" : (null ?? typeof value)}'`,
+          `Expected an array, but received '${
+            value === null ? "null" : typeof value
+          }'`
         );
 
       const elementFieldSelection = (() => {
@@ -487,7 +493,9 @@ export function reshapeResultUsingFieldSelection(
             return fieldSelection.fields;
           case "object":
             throw new sdk.BadRequest(
-              `Trying to perform an object selection on an array type at '${valuePath.join(".")}'`,
+              `Trying to perform an object selection on an array type at '${valuePath.join(
+                "."
+              )}'`
             );
           default:
             return unreachable(fieldSelection["type"]);
@@ -500,8 +508,8 @@ export function reshapeResultUsingFieldSelection(
           type.elementType,
           [...valuePath, `[${index}]`],
           elementFieldSelection,
-          objectTypes,
-        ),
+          objectTypes
+        )
       );
 
     case "nullable":
@@ -514,7 +522,7 @@ export function reshapeResultUsingFieldSelection(
             type.underlyingType,
             valuePath,
             fieldSelection,
-            objectTypes,
+            objectTypes
           );
 
     case "named":
@@ -528,7 +536,7 @@ export function reshapeResultUsingFieldSelection(
           const objectType = objectTypes[type.name];
           if (objectType === undefined)
             throw new sdk.InternalServerError(
-              `Unable to find object type definition '${type.name}'`,
+              `Unable to find object type definition '${type.name}'`
             );
           // @ts-ignore
           if (
@@ -538,7 +546,13 @@ export function reshapeResultUsingFieldSelection(
           )
             // @ts-ignore
             throw new sdk.InternalServerError(
-              `Expected an object, but received '${value === null ? "null" : (null ?? Array.isArray(value)) ? "array" : (null ?? typeof value)}'`,
+              `Expected an object, but received '${
+                value === null
+                  ? "null"
+                  : Array.isArray(value)
+                  ? "array"
+                  : typeof value
+              }'`
             );
 
           const selectedFields: Record<string, sdk.Field> = (() => {
@@ -548,11 +562,13 @@ export function reshapeResultUsingFieldSelection(
                   objectType.properties.map((propDef) => [
                     propDef.propertyName,
                     { type: "column", column: propDef.propertyName },
-                  ]),
+                  ])
                 );
               case "array":
                 throw new sdk.BadRequest(
-                  `Trying to perform an array selection on an object type at '${valuePath.join(".")}'`,
+                  `Trying to perform an array selection on an object type at '${valuePath.join(
+                    "."
+                  )}'`
                 );
               case "object":
                 return fieldSelection.fields;
@@ -565,11 +581,15 @@ export function reshapeResultUsingFieldSelection(
             switch (field.type) {
               case "column":
                 const objPropDef = objectType.properties.find(
-                  (prop) => prop.propertyName === field.column,
+                  (prop) => prop.propertyName === field.column
                 );
                 if (objPropDef === undefined)
                   throw new sdk.BadRequest(
-                    `Unable to find property definition '${field.column}' on object type '${type.name}' at '${valuePath.join(".")}'`,
+                    `Unable to find property definition '${
+                      field.column
+                    }' on object type '${type.name}' at '${valuePath.join(
+                      "."
+                    )}'`
                   );
 
                 const columnFieldSelection = field.fields ?? { type: "scalar" };
@@ -578,12 +598,12 @@ export function reshapeResultUsingFieldSelection(
                   objPropDef.type,
                   [...valuePath, fieldName],
                   columnFieldSelection,
-                  objectTypes,
+                  objectTypes
                 );
 
               case "relationship":
                 throw new sdk.NotSupported(
-                  `Field '${fieldName}' is a relationship field, which is unsupported.'`,
+                  `Field '${fieldName}' is a relationship field, which is unsupported.'`
                 );
 
               default:
@@ -602,7 +622,7 @@ export function reshapeResultUsingFieldSelection(
 function convertBuiltInNdcJsonScalarToJsScalar(
   value: unknown,
   valuePath: string[],
-  scalarType: schema.BuiltInScalarTypeReference,
+  scalarType: schema.BuiltInScalarTypeReference
 ): string | number | boolean | BigInt | Date | schema.JSONValue {
   switch (scalarType.name) {
     case schema.BuiltInScalarTypeName.String:
@@ -612,12 +632,16 @@ function convertBuiltInNdcJsonScalarToJsScalar(
           value !== scalarType.literalValue
         )
           throw new sdk.UnprocessableContent(
-            `Invalid value in function arguments. Only the value '${scalarType.literalValue}' is accepted at '${valuePath.join(".")}', got '${value}'`,
+            `Invalid value in function arguments. Only the value '${
+              scalarType.literalValue
+            }' is accepted at '${valuePath.join(".")}', got '${value}'`
           );
         return value;
       } else {
         throw new sdk.BadRequest(
-          `Unexpected value in function arguments. Expected a string at '${valuePath.join(".")}', got a ${typeof value}`,
+          `Unexpected value in function arguments. Expected a string at '${valuePath.join(
+            "."
+          )}', got a ${typeof value}`
         );
       }
 
@@ -628,12 +652,16 @@ function convertBuiltInNdcJsonScalarToJsScalar(
           value !== scalarType.literalValue
         )
           throw new sdk.UnprocessableContent(
-            `Invalid value in function arguments. Only the value '${scalarType.literalValue}' is accepted at '${valuePath.join(".")}', got '${value}'`,
+            `Invalid value in function arguments. Only the value '${
+              scalarType.literalValue
+            }' is accepted at '${valuePath.join(".")}', got '${value}'`
           );
         return value;
       } else {
         throw new sdk.BadRequest(
-          `Unexpected value in function arguments. Expected a number at '${valuePath.join(".")}', got a ${typeof value}`,
+          `Unexpected value in function arguments. Expected a number at '${valuePath.join(
+            "."
+          )}', got a ${typeof value}`
         );
       }
 
@@ -644,12 +672,16 @@ function convertBuiltInNdcJsonScalarToJsScalar(
           value !== scalarType.literalValue
         )
           throw new sdk.UnprocessableContent(
-            `Invalid value in function arguments. Only the value '${scalarType.literalValue}' is accepted at '${valuePath.join(".")}', got '${value}'`,
+            `Invalid value in function arguments. Only the value '${
+              scalarType.literalValue
+            }' is accepted at '${valuePath.join(".")}', got '${value}'`
           );
         return value;
       } else {
         throw new sdk.BadRequest(
-          `Unexpected value in function arguments. Expected a boolean at '${valuePath.join(".")}', got a ${typeof value}`,
+          `Unexpected value in function arguments. Expected a boolean at '${valuePath.join(
+            "."
+          )}', got a ${typeof value}`
         );
       }
 
@@ -658,7 +690,9 @@ function convertBuiltInNdcJsonScalarToJsScalar(
         if (typeof value === "number") {
           if (!Number.isInteger(value))
             throw new sdk.UnprocessableContent(
-              `Invalid value in function arguments. Expected a integer number at '${valuePath.join(".")}', got a float: '${value}'`,
+              `Invalid value in function arguments. Expected a integer number at '${valuePath.join(
+                "."
+              )}', got a float: '${value}'`
             );
           return BigInt(value);
         } else if (typeof value === "string") {
@@ -666,7 +700,9 @@ function convertBuiltInNdcJsonScalarToJsScalar(
             return BigInt(value);
           } catch {
             throw new sdk.UnprocessableContent(
-              `Invalid value in function arguments. Expected a bigint string at '${valuePath.join(".")}', got a non-integer string: '${value}'`,
+              `Invalid value in function arguments. Expected a bigint string at '${valuePath.join(
+                "."
+              )}', got a non-integer string: '${value}'`
             );
           }
         } else if (typeof value === "bigint") {
@@ -674,7 +710,9 @@ function convertBuiltInNdcJsonScalarToJsScalar(
           return value;
         } else {
           throw new sdk.BadRequest(
-            `Unexpected value in function arguments. Expected a bigint at '${valuePath.join(".")}', got a ${typeof value}`,
+            `Unexpected value in function arguments. Expected a bigint at '${valuePath.join(
+              "."
+            )}', got a ${typeof value}`
           );
         }
       })();
@@ -683,7 +721,9 @@ function convertBuiltInNdcJsonScalarToJsScalar(
         bigIntValue !== scalarType.literalValue
       )
         throw new sdk.UnprocessableContent(
-          `Invalid value in function arguments. Only the value '${scalarType.literalValue}' is accepted at '${valuePath.join(".")}', got '${value}'`,
+          `Invalid value in function arguments. Only the value '${
+            scalarType.literalValue
+          }' is accepted at '${valuePath.join(".")}', got '${value}'`
         );
       return bigIntValue;
 
@@ -692,19 +732,25 @@ function convertBuiltInNdcJsonScalarToJsScalar(
         const parsedDate = Date.parse(value);
         if (isNaN(parsedDate))
           throw new sdk.UnprocessableContent(
-            `Invalid value in function arguments. Expected an ISO 8601 calendar date extended format string at '${valuePath.join(".")}', but the value failed to parse: '${value}'`,
+            `Invalid value in function arguments. Expected an ISO 8601 calendar date extended format string at '${valuePath.join(
+              "."
+            )}', but the value failed to parse: '${value}'`
           );
         return new Date(parsedDate);
       } else {
         throw new sdk.BadRequest(
-          `Unexpected value in function arguments. Expected a ISO 8601 calendar date extended format string at '${valuePath.join(".")}', got a ${typeof value}`,
+          `Unexpected value in function arguments. Expected a ISO 8601 calendar date extended format string at '${valuePath.join(
+            "."
+          )}', got a ${typeof value}`
         );
       }
 
     case schema.BuiltInScalarTypeName.JSON:
       if (value === undefined) {
         throw new sdk.BadRequest(
-          `Unexpected value in function arguments. Expected a JSONValue at '${valuePath.join(".")}', got undefined`,
+          `Unexpected value in function arguments. Expected a JSONValue at '${valuePath.join(
+            "."
+          )}', got undefined`
         );
       }
       return new schema.JSONValue(value, true);
@@ -716,7 +762,7 @@ function convertBuiltInNdcJsonScalarToJsScalar(
 
 function convertJsScalarToNdcJsonScalar(
   value: unknown,
-  valuePath: string[],
+  valuePath: string[]
 ): unknown {
   if (typeof value === "bigint") {
     // BigInts can't be serialized to JSON natively, so put them in strings
@@ -726,7 +772,9 @@ function convertJsScalarToNdcJsonScalar(
   } else if (value instanceof schema.JSONValue) {
     if (value.validationError) {
       throw new sdk.InternalServerError(
-        `Unable to serialize JSONValue to JSON at path '${valuePath.join(".")}: ${value.validationError.message}'`,
+        `Unable to serialize JSONValue to JSON at path '${valuePath.join(
+          "."
+        )}: ${value.validationError.message}'`
       );
     }
     return value.value;
