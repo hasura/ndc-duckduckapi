@@ -3,6 +3,5 @@ export {
   makeConnector,
   duckduckapi,
   db,
-  getTokensFromHeader,
+  getOAuthCredentialsFromHeader,
 } from "./duckduckapi";
-export { CalendarSyncManager } from "./google-calendar-sync";

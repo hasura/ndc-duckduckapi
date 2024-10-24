@@ -20,7 +20,8 @@
     "watch": "nodemon --watch \"src/**\" --ext \"ts,json\" --ignore \"src/**/*.spec.ts\" --exec \"ts-node src/index.ts serve --configuration=."
   },
   "exports": {
-    ".": "./dist/src/sdk.js"
+    ".": "./dist/src/sdk.js",
+    "./services": "./dist/src/services/index.js"
   },
   "dependencies": {
     "@hasura/ndc-lambda-sdk": "^1.9.0",

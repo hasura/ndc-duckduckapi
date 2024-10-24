@@ -1,7 +1,55 @@
 import { google, calendar_v3 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
-import { db } from "./duckduckapi";
-import { readJsonConfigFile } from "typescript";
+import { db } from "../duckduckapi";
+
+export const Schema = `
+
+
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id VARCHAR PRIMARY KEY,
+  summary VARCHAR,
+  description VARCHAR,
+  start_time TIMESTAMP,
+  end_time TIMESTAMP,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP,
+  creator_email VARCHAR,
+  organizer_email VARCHAR,
+  status VARCHAR,
+  location VARCHAR,
+  recurring_event_id VARCHAR,
+  recurrence JSON, 
+  transparency VARCHAR,
+  visibility VARCHAR,
+  ical_uid VARCHAR,
+  attendees JSON,
+  reminders JSON,
+  conference_data JSON,
+  color_id VARCHAR,
+  original_start_time TIMESTAMP,
+  extended_properties JSON,
+  attachments JSON,
+  html_link VARCHAR,
+  meeting_type VARCHAR,
+  sequence INTEGER,
+  event_type VARCHAR,
+  calendar_id VARCHAR,
+  sync_status VARCHAR,
+  last_synced TIMESTAMP,
+  is_all_day BOOLEAN
+);
+
+COMMENT ON TABLE calendar_events IS 'This table contains events from google calendar. While querying this table keep the following in mind. 1) The title of the event is stored in the summary field. 2) typically add a filter to remove cancelled events by checking status != \'cancelled\', and similarly remove deleted events by check if status != \
+'deleted\'.';
+
+
+CREATE TABLE IF NOT EXISTS sync_state (
+  calendar_id VARCHAR PRIMARY KEY,
+  sync_token VARCHAR,
+  last_sync TIMESTAMP
+);
+COMMENT ON TABLE sync_state IS 'This table contains the sync state for the calendar job. This is not a table that would typically be queried. The sync_token is used to sync incremental changes from the google calendar API.';
+`
 
 interface CalendarEvent {
   id: string;
@@ -42,13 +90,18 @@ interface SyncState {
   last_sync: string;
 }
 
-export class CalendarSyncManager {
+interface LoaderState {
+  state: string;
+}
+
+export class SyncManager {
   private calendar: calendar_v3.Calendar;
   private syncInterval?: NodeJS.Timeout;
 
   constructor(
     private accessToken: string,
     private syncIntervalMinutes: number = 15,
+    private loaderState: LoaderState
   ) {
     const auth = new OAuth2Client();
     auth.setCredentials({ access_token: accessToken });
@@ -74,8 +127,26 @@ export class CalendarSyncManager {
     return calendarAccessResult;
   }
 
-  async initialize(): Promise<void> {
-    await this.startPeriodicSync();
+  async initialize(): Promise<string> {
+    
+    // Test access to calendar by fetching one event
+    try {
+      this.loaderState.state = await this.test();
+    } catch (error) {
+      this.loaderState.state = `Error in testing google-calendar access: ${error}. Have you logged in to google-calendar?`;
+      return this.loaderState.state;
+    }
+  
+    console.log("Initializing sync manager...");
+    this.loaderState.state = "running";
+    this.startPeriodicSync();
+
+    process.on("SIGINT", async () => {
+      await this.cleanup();
+      process.exit(0);
+    });
+  
+    return this.loaderState.state;
   }
 
   private async startPeriodicSync(): Promise<void> {

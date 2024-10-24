@@ -1,74 +1,63 @@
 import { JSONValue } from "@hasura/ndc-lambda-sdk";
-import { CalendarSyncManager } from "@hasura/ndc-duckduckapi";
-import { getTokensFromHeader } from "@hasura/ndc-duckduckapi";
+import { GoogleCalendar } from "@hasura/ndc-duckduckapi/services";
+import { getOAuthCredentialsFromHeader } from "@hasura/ndc-duckduckapi";
 
-export let loaderStatus: string = "stopped";
+
+const myLoaderState = {
+  state: 'unimplemented'
+}
 
 /**
  * This is the loader function which will start loading data into duckdb.
  *  // Mark your functions with this annotation to see it in the console
- *  // Replace sample-loader to create your own unique name, eg: my-saas-loader, and to group it with the right job status method.
- * $ddn.jobs.sample-loader.init
+ *  // Replace my-loader to create your own unique name, eg: my-saas-loader, and to group it with the right job status method.
+ * $ddn.jobs.my-loader.init
  */
-export async function __dda_loader_init(headers: JSONValue): Promise<string> {
+export async function __dda_my_loader_init(headers: JSONValue): Promise<string> {
 
-  if (loaderStatus === "running") {
-    return loaderStatus;
+  // If the loader is already running, return the current state
+  if (myLoaderState.state === "running") {
+    return myLoaderState.state;
   }
 
-  let access_token: string | null = null;
-  try {
-    access_token = getTokensFromHeader(headers, "google-calendar").access_token;
-  } catch (error) {
-    loaderStatus = `Error in getting the google-calendar oauth credentials: ${error}. Login to google-calendar?`;
-    return loaderStatus;
+  // Get the oauth credentials from the header
+  let credentials;
+  credentials = getOAuthCredentialsFromHeader(headers);
+  console.log(credentials);
+
+  // If the credentials are not found, return an error and update the status so that the user can login
+  if (!credentials || !credentials['my-service'] || !credentials['my-service'].access_token) {
+    myLoaderState.state = `Error in getting the my-service oauth credentials. Login to my-service?`;
+    return myLoaderState.state;
   }
 
-  if (!access_token) {
-    console.log(headers.value);
-    loaderStatus =
-      "google-calendar access token not found in oauth services. Login to google-calendar?";
-    return loaderStatus;
-  }
+  /* Implement the logic to load data from my-service into duckdb 
+  
+  1. Use the credentials to do a quick syncronous test if access to my-service is successful
+  2. If yes, then update your loader state to running and initialize the loader and make it run asynchronously
+  3. Return the loader state 
 
-  const syncManager = new CalendarSyncManager(
-    access_token,
-    1, // sync every minute
-  );
+  */
 
-  try {
-    loaderStatus = await syncManager.test();
-  } catch (error) {
-    loaderStatus = `Error in testing google-calendar access: ${error}. Have you logged in to google-calendar?`;
-    return loaderStatus;
-  }
-
-  console.log("Initializing sync manager");
-  syncManager.initialize();
-  loaderStatus = "running";
-  process.on("SIGINT", async () => {
-    await syncManager.cleanup();
-    process.exit(0);
-  });
-
-  return loaderStatus;
+  return myLoaderState.state;
 }
 
 /**
  *  Function that gives you the current status of the loader job.
  *  // Mark your functions with this annotation to see it in the console
  *  // Replace sample-loader to create your own unique name, eg: my-saas-loader, and to group it with the right job init method.
- *  $ddn.jobs.sample-loader.status
+ *  $ddn.jobs.my-loader.status
  *
  *  @readonly
  * */
-export function __dda_loader_status(): string {
-  return loaderStatus;
+export function __dda_my_loader_status(): string {
+  return myLoaderState.state;
 }
 
+/* Some other examples of custom actions you want to provide or APIs you want to wrap over */
 /** @readonly */
 export function hello(name: string, year: number): string {
-  return `Hello ${name}, welcome to ${year}`;
+  return `Helloooo ${name}, welcome to ${year}`;
 }
 
 /** @readonly */
@@ -79,3 +68,50 @@ export function bye(name: string): string {
 export async function sendEmail(email: string): Promise<string> {
   return `Email sent to: ${email}!`;
 }
+
+
+/************************** BUILT-IN EXAMPLES ************************************* */
+
+/* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
+const calendarLoaderState = {
+  state: 'stopped'
+}
+
+/**
+ * This is the loader function which will start loading data into duckdb.
+ *  // Mark your functions with this annotation to see it in the console
+ *  // Replace sample-loader to create your own unique name, eg: my-saas-loader, and to group it with the right job status method.
+ * $ddn.jobs.calendar-loader.init
+ */
+export async function __dda_calendar_loader_init(headers: JSONValue): Promise<string> {
+
+  if (calendarLoaderState.state === "running") {
+    return calendarLoaderState.state;
+  }
+
+  let credentials;
+  credentials = getOAuthCredentialsFromHeader(headers);
+
+  if (!credentials || !credentials['google-calendar'] || !credentials['google-calendar'].access_token) {
+    console.log(credentials);
+    calendarLoaderState.state = `Error in getting the google-calendar oauth credentials. Login to google-calendar?`;
+    return calendarLoaderState.state;
+  }
+
+  const syncManager = new GoogleCalendar.syncManager (
+    credentials['google-calendar'].access_token,
+    1, // sync every minute
+    calendarLoaderState
+  );
+
+  return await syncManager.initialize();
+ 
+}
+
+/**
+ *  @readonly
+ * */
+export function __dda_calendar_loader_status(): string {
+  return calendarLoaderState.state;
+}
+

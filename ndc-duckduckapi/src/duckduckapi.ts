@@ -251,10 +251,9 @@ export async function makeConnector(
   return Promise.resolve(connector);
 }
 
-export function getTokensFromHeader(
-  headers: JSONValue,
-  service: string,
-): { access_token: string | null; refresh_token: string | null } {
+export function getOAuthCredentialsFromHeader (
+  headers: JSONValue
+): Record<string, any> {
   const oauthServices = headers.value as any;
   console.log(oauthServices);
   try {
@@ -263,9 +262,7 @@ export function getTokensFromHeader(
       "base64",
     ).toString("utf-8");
     const serviceTokens = JSON.parse(decodedServices);
-    const access_token = serviceTokens[service]?.access_token;
-    const refresh_token = serviceTokens[service]?.refresh_token;
-    return { access_token, refresh_token };
+    return serviceTokens;
   } catch (error) {
     console.log(error);
     if (error instanceof Error) {
