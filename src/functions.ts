@@ -4,6 +4,11 @@ import { getTokensFromHeader } from './duckduckapi';
 
 export let loaderStatus: string = 'stopped';
 
+/*TODO:
+- 
+-
+*/
+
 /**
  * This is the loader function which will start loading data into duckdb.
  *  // Mark your functions with this annotation to see it in the console
@@ -12,12 +17,17 @@ export let loaderStatus: string = 'stopped';
  */
 export async function __dda_loader_init(headers: JSONValue): Promise<string> {
 
-    const oauthServices = headers.value as any;
-    const {access_token} = getTokensFromHeader(headers, 'google-calendar');
+    let access_token: string | null = null;
+    try {
+      access_token = getTokensFromHeader(headers, 'google-calendar').access_token;
+    } catch (error) {
+      loaderStatus = `Error in getting the google-calendar oauth credentials: ${error}. Login to google-calendar?`;
+      return loaderStatus;
+    }
 
     if (!access_token) {
       console.log(headers.value);
-      loaderStatus = 'google-calendar key not found in oauth services. Login to google-calendar?';
+      loaderStatus = 'google-calendar access token not found in oauth services. Login to google-calendar?';
       return loaderStatus;
     }
 
@@ -29,8 +39,10 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
     
     if (!result) {
       loaderStatus = result + '. Have you logged in to google-calendar?';
+      return loaderStatus;
     }
 
+    console.log('Initializing sync manager');
     syncManager.initialize();
     loaderStatus = 'running';
     process.on('SIGINT', async () => {
@@ -50,6 +62,7 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
  *  @readonly
  * */
 export function __dda_loader_status(): string {
+    console.log(loaderStatus);
     return loaderStatus;
 }
 
