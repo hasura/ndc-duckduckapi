@@ -4,11 +4,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "ndc-lambda-sdk host -f functions.ts serve --configuration ./",
-    "watch": "ndc-lambda-sdk host -f functions.ts --watch serve --configuration ./ --pretty-print-logs"
+    "start": "ts-node index.ts serve --configuration=.",
+    "watch": "nodemon --watch \"./**\" --ext \"ts,json\" --exec \"ts-node index.ts serve --configuration=."
   },
   "dependencies": {
-    "@hasura/ndc-duckduckapi": "*"
+    "@hasura/ndc-duckduckapi": "*",
+    "ts-node": "^10.9.2",
+    "@tsconfig/node20": "^20.1.4"
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.2"

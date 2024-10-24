@@ -12,9 +12,13 @@
   "scripts": {
     "build": "tsc",
     "test": "true",
+    "clean": "rm -rf dist",
     "start": "ts-node ./src/index.ts serve --configuration=.",
     "generate-config": "ts-node generate-config",
     "watch": "nodemon --watch \"src/**\" --ext \"ts,json\" --ignore \"src/**/*.spec.ts\" --exec \"ts-node src/index.ts serve --configuration=."
+  },
+  "exports": {
+    ".": "./dist/src/sdk.js"
   },
   "dependencies": {
     "@hasura/ndc-lambda-sdk": "^1.8.0",

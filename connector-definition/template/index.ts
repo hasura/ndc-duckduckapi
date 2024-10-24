@@ -1,9 +1,10 @@
-import { start } from "@hasura/ndc-sdk-typescript";
+import { start } from "@hasura/ndc-duckduckapi";
 import {
   makeConnector,
   duckduckapi,
   db,
 } from "../../ndc-duckduckapi/src/duckduckapi";
+import * as path from "path";
 
 const calendar: duckduckapi = {
   dbSchema: `
@@ -47,7 +48,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
   last_sync TIMESTAMP
 );
     `,
-  functionsFilePath: "./functions.ts",
+  functionsFilePath: path.resolve(__dirname, "./functions.ts"),
 };
 
 (async () => {
