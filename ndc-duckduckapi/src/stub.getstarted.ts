@@ -8,7 +8,6 @@ npm start connector
 <ddn takes over>
 */
 
-
 /*
 index.ts:
 - ndc.start(connector)
@@ -36,7 +35,6 @@ index.ts:
     - getHealthReadiness: NA
     - fetchMetrics: NA
 */
-
 
 /* Building a connector
     index.ts:

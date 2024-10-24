@@ -88,7 +88,7 @@ export interface duckduckapi {
 }
 
 export async function makeConnector(
-  dda: duckduckapi
+  dda: duckduckapi,
 ): Promise<Connector<Configuration, State>> {
   /**
    * Create the db and load the DB path as a global variable
@@ -103,7 +103,7 @@ export async function makeConnector(
      */
 
     parseConfiguration: async function (
-      configurationDir: string
+      configurationDir: string,
     ): Promise<Configuration> {
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
@@ -128,7 +128,7 @@ export async function makeConnector(
       // implementing our own hot-reloading system instead of using ts-node-dev.
       if (runtimeFunctions !== undefined) {
         const schemaResults = deriveSchema(
-          require.resolve(dda.functionsFilePath)
+          require.resolve(dda.functionsFilePath),
         );
         printCompilerDiagnostics(schemaResults.compilerDiagnostics); // Should never have any of these, since we've already tried compiling the code above
         printFunctionIssues(schemaResults.functionIssues);
@@ -195,7 +195,7 @@ export async function makeConnector(
      * @param configuration
      */
     getSchema: async function (
-      configuration: Configuration
+      configuration: Configuration,
     ): Promise<SchemaResponse> {
       return Promise.resolve(do_get_schema(configuration));
     },
@@ -212,7 +212,7 @@ export async function makeConnector(
     queryExplain(
       configuration: Configuration,
       _: State,
-      request: QueryRequest
+      request: QueryRequest,
     ): Promise<ExplainResponse> {
       return do_explain(configuration, request);
     },
@@ -226,7 +226,7 @@ export async function makeConnector(
     mutationExplain(
       configuration: Configuration,
       _: State,
-      request: MutationRequest
+      request: MutationRequest,
     ): Promise<ExplainResponse> {
       throw new Forbidden("Not implemented", {});
     },
@@ -243,7 +243,7 @@ export async function makeConnector(
     query(
       configuration: Configuration,
       state: State,
-      request: QueryRequest
+      request: QueryRequest,
     ): Promise<QueryResponse> {
       return do_query(configuration, state, request);
     },
@@ -260,7 +260,7 @@ export async function makeConnector(
     mutation(
       configuration: Configuration,
       _: State,
-      request: MutationRequest
+      request: MutationRequest,
     ): Promise<MutationResponse> {
       return do_mutation(configuration, request);
     },
@@ -299,12 +299,12 @@ export async function makeConnector(
 
 export function getTokensFromHeader(
   headers: JSONValue,
-  service: string
+  service: string,
 ): { access_token: string | null; refresh_token: string | null } {
   const oauthServices = headers.value as any;
   const decodedServices = Buffer.from(
     oauthServices["x-hasura-oauth-services"] as string,
-    "base64"
+    "base64",
   ).toString("utf-8");
   const serviceTokens = JSON.parse(decodedServices);
   const access_token = serviceTokens[service]?.access_token;

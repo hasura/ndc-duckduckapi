@@ -10,7 +10,7 @@ export type HostOptions = {
 export interface CommandActions {
   serveAction(
     hostOpts: HostOptions,
-    serverOpts: sdk.ServerOptions
+    serverOpts: sdk.ServerOptions,
   ): Promise<void> | void;
 }
 
@@ -28,11 +28,11 @@ export function makeCommand(commandActions: CommandActions): Command {
     .addOption(
       new Option("--watch", "watch for configuration changes and reload")
         .default(false)
-        .env("WATCH")
+        .env("WATCH"),
     )
     .requiredOption(
       "-f, --functions <filepath>",
-      "path to your TypeScript functions file"
+      "path to your TypeScript functions file",
     )
     .addCommand(serveCommand);
 

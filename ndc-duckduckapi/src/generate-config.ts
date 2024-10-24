@@ -87,7 +87,7 @@ async function queryAll(con: any, query: any): Promise<any[]> {
 }
 
 export async function generateConfig(
-  db: duckdb.Database
+  db: duckdb.Database,
 ): Promise<DuckDBConfigurationSchema> {
   const tableNames: string[] = [];
   const tableAliases: { [k: string]: string } = {};

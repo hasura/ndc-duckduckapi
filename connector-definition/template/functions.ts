@@ -23,7 +23,7 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
 
   const syncManager = new CalendarSyncManager(
     access_token,
-    1 // sync every minute
+    1, // sync every minute
   );
   const result = await syncManager.test();
 
