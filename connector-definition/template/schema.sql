@@ -1,9 +1,4 @@
-import { start } from "@hasura/ndc-sdk-typescript";
-import { makeConnector, duckduckapi, db } from "./duckduckapi";
-
-const calendar: duckduckapi = {
-  dbSchema: `
-    CREATE TABLE IF NOT EXISTS calendar_events (
+CREATE TABLE IF NOT EXISTS calendar_events (
   id VARCHAR PRIMARY KEY,
   summary VARCHAR,
   description VARCHAR,
@@ -42,11 +37,3 @@ CREATE TABLE IF NOT EXISTS sync_state (
   sync_token VARCHAR,
   last_sync TIMESTAMP
 );
-    `,
-  functionsFilePath: "./functions.ts",
-};
-
-(async () => {
-  const connector = await makeConnector(calendar);
-  start(connector);
-})();

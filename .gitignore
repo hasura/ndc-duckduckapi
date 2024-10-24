@@ -9,3 +9,7 @@ chinook.db.wal
 duck.db
 duck.db.wal
 
+ndc-duckduckapi/dist
+
+connector-definition/dist
+connector-definition/template/package-lock.json

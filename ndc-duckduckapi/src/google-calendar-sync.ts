@@ -59,26 +59,19 @@ export class CalendarSyncManager {
     // Fetch one event to check if everything is valid
     let calendarAccessResult: string;
 
-    try {
-      const response = await this.calendar.events.list({
-        calendarId: "primary",
-        maxResults: 1,
-      });
-      if (response.data.items) {
-        console.log(response.data.items);
-        calendarAccessResult =
-          "Test fetch from calendar successful. Starting loader...";
-      } else {
-        calendarAccessResult =
-          "No items received in test fetch. Starting loader anyway...";
-      }
-    } catch (error) {
-      calendarAccessResult = String(error);
-    }
-
-    return new Promise((resolve, reject) => {
-      resolve(calendarAccessResult);
+    const response = await this.calendar.events.list({
+      calendarId: "primary",
+      maxResults: 1,
     });
+    if (response.data.items) {
+      console.log(response.data.items);
+      calendarAccessResult =
+        "Test fetch from calendar successful. Starting loader...";
+    } else {
+      calendarAccessResult =
+        "No items received in test fetch. Starting loader anyway...";
+    }
+    return calendarAccessResult;
   }
 
   async initialize(): Promise<void> {

@@ -1,12 +1,24 @@
 {
-  "name": "duckdb-sdk",
-  "version": "0.1.0",
-  "description": "",
+  "name": "@hasura/ndc-duckduckapi",
+  "version": "0.1.3",
+  "description": "SDK for the Hasura DDN DuckDuckAPI connector. Easily build a data API from any existing API by ETLing data into DuckDB.",
+  "author": "Hasura",
+  "license": "Apache-2.0",
   "main": "index.js",
+  "homepage": "https://github.com/hasura/ndc-duckduckapi#readme",
+  "bugs": {
+    "url": "https://github.com/hasura/ndc-duckduckapi/issues"
+  },
   "scripts": {
+    "build": "tsc",
+    "test": "true",
+    "clean": "rm -rf dist",
     "start": "ts-node ./src/index.ts serve --configuration=.",
     "generate-config": "ts-node generate-config",
     "watch": "nodemon --watch \"src/**\" --ext \"ts,json\" --ignore \"src/**/*.spec.ts\" --exec \"ts-node src/index.ts serve --configuration=."
+  },
+  "exports": {
+    ".": "./dist/src/sdk.js"
   },
   "dependencies": {
     "@hasura/ndc-lambda-sdk": "^1.9.0",

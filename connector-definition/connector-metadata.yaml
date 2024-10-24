@@ -1,16 +1,17 @@
 packagingDefinition:
-  type: PrebuiltDockerImage
-  dockerImage: ghcr.io/hasura/ndc-duckdb:v0.1.0
-supportedEnvironmentVariables:
-  - name: DUCKDB_URL
-    description: The url for the DuckDB database
-commands:
-  update:
-    type: Dockerized
-    dockerImage: ghcr.io/hasura/ndc-duckdb:v0.1.0
-    commandArgs:
-      - update
+  type: ManagedDockerBuild
+supportedEnvironmentVariables: []
+commands: {}
 dockerComposeWatch:
+  # Rebuild the container if a new package restore is required because package[-lock].json changed
+  - path: package.json
+    target: /functions/package.json
+    action: rebuild
+  - path: package-lock.json
+    target: /functions/package-lock.json
+    action: rebuild
+  # For any other file change, simply copy it into the existing container and restart it
   - path: ./
-    target: /etc/connector
+    target: /functions
     action: sync+restart
+documentationPage: https://hasura.info/nodejs-getting-started

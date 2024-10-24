@@ -22,7 +22,7 @@ import { do_get_schema } from "./handlers/schema";
 import { do_explain } from "./handlers/explain";
 import { perform_query, plan_queries } from "./handlers/query";
 import * as duckdb from "duckdb";
-import { generateConfig } from "../generate-config";
+import { generateConfig } from "./generate-config";
 
 const DUCKDB_URL = "duck.db"; // process.env["DUCKDB_URL"] as string || "duck.db";
 export const db = new duckdb.Database(DUCKDB_URL);
@@ -90,6 +90,8 @@ export async function makeConnector(
     ): Promise<Configuration> {
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
+
+      console.log("#####", dda.functionsFilePath);
 
       const config =
         await lambdaSdkConnector.parseConfiguration(configurationDir);
@@ -254,12 +256,21 @@ export function getTokensFromHeader(
   service: string,
 ): { access_token: string | null; refresh_token: string | null } {
   const oauthServices = headers.value as any;
-  const decodedServices = Buffer.from(
-    oauthServices["x-hasura-oauth-services"] as string,
-    "base64",
-  ).toString("utf-8");
-  const serviceTokens = JSON.parse(decodedServices);
-  const access_token = serviceTokens[service]?.access_token;
-  const refresh_token = serviceTokens[service]?.refresh_token;
-  return { access_token, refresh_token };
+  console.log(oauthServices);
+  try {
+    const decodedServices = Buffer.from(
+      oauthServices["x-hasura-oauth-services"] as string,
+      "base64",
+    ).toString("utf-8");
+    const serviceTokens = JSON.parse(decodedServices);
+    const access_token = serviceTokens[service]?.access_token;
+    const refresh_token = serviceTokens[service]?.refresh_token;
+    return { access_token, refresh_token };
+  } catch (error) {
+    console.log(error);
+    if (error instanceof Error) {
+      console.log(error.stack);
+    }
+    throw error;
+  }
 }

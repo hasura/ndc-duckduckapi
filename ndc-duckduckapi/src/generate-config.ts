@@ -2,7 +2,7 @@ import { NotSupported, ObjectType } from "@hasura/ndc-sdk-typescript";
 import * as duckdb from "duckdb";
 import * as fs from "fs";
 import { promisify } from "util";
-import { DuckDBConfigurationSchema } from "./src/duckduckapi";
+import { DuckDBConfigurationSchema } from "./duckduckapi";
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 let HASURA_CONFIGURATION_DIRECTORY = process.env[

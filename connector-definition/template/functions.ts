@@ -1,6 +1,6 @@
 import { JSONValue } from "@hasura/ndc-lambda-sdk";
-import { CalendarSyncManager } from "./google-calendar-sync";
-import { getTokensFromHeader } from "./duckduckapi";
+import { CalendarSyncManager } from "@hasura/ndc-duckduckapi";
+import { getTokensFromHeader } from "@hasura/ndc-duckduckapi";
 
 export let loaderStatus: string = "stopped";
 
@@ -11,13 +11,23 @@ export let loaderStatus: string = "stopped";
  * $ddn.jobs.sample-loader.init
  */
 export async function __dda_loader_init(headers: JSONValue): Promise<string> {
-  const oauthServices = headers.value as any;
-  const { access_token } = getTokensFromHeader(headers, "google-calendar");
+
+  if (loaderStatus === "running") {
+    return loaderStatus;
+  }
+
+  let access_token: string | null = null;
+  try {
+    access_token = getTokensFromHeader(headers, "google-calendar").access_token;
+  } catch (error) {
+    loaderStatus = `Error in getting the google-calendar oauth credentials: ${error}. Login to google-calendar?`;
+    return loaderStatus;
+  }
 
   if (!access_token) {
     console.log(headers.value);
     loaderStatus =
-      "google-calendar key not found in oauth services. Login to google-calendar?";
+      "google-calendar access token not found in oauth services. Login to google-calendar?";
     return loaderStatus;
   }
 
@@ -25,12 +35,15 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
     access_token,
     1, // sync every minute
   );
-  const result = await syncManager.test();
 
-  if (!result) {
-    loaderStatus = result + ". Have you logged in to google-calendar?";
+  try {
+    loaderStatus = await syncManager.test();
+  } catch (error) {
+    loaderStatus = `Error in testing google-calendar access: ${error}. Have you logged in to google-calendar?`;
+    return loaderStatus;
   }
 
+  console.log("Initializing sync manager");
   syncManager.initialize();
   loaderStatus = "running";
   process.on("SIGINT", async () => {
@@ -38,7 +51,7 @@ export async function __dda_loader_init(headers: JSONValue): Promise<string> {
     process.exit(0);
   });
 
-  return result;
+  return loaderStatus;
 }
 
 /**

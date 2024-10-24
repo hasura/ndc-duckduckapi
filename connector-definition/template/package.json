@@ -1,0 +1,19 @@
+{
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "ts-node index.ts serve --configuration=.",
+    "watch": "nodemon --watch  --exec ts-node index.ts serve --configuration=."
+  },
+  "dependencies": {
+    "@hasura/ndc-lambda-sdk": "^1.8.0",
+    "@tsconfig/node20": "^20.1.4",
+    "ts-node": "^10.9.2",
+    "@hasura/ndc-duckduckapi": "file:///../../ndc-duckduckapi"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.2"
+  }
+}

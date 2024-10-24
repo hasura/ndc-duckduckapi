@@ -7,10 +7,7 @@ import {
 import { DuckDBConfigurationSchema } from "../duckduckapi";
 import { SCALAR_TYPES } from "../constants";
 
-export function do_get_schema(
-  duckdbconfig: DuckDBConfigurationSchema,
-  functionsNDCSchema: SchemaResponse,
-): SchemaResponse {
+export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functionsNDCSchema: SchemaResponse): SchemaResponse {
   if (!duckdbconfig) {
     throw new Error("Configuration is missing");
   }
