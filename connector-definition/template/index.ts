@@ -1,9 +1,5 @@
 import { start } from "@hasura/ndc-duckduckapi";
-import {
-  makeConnector,
-  duckduckapi,
-  db,
-} from "../../ndc-duckduckapi/src/duckduckapi";
+import { makeConnector, duckduckapi } from "@hasura/ndc-duckduckapi";
 import * as path from "path";
 
 const calendar: duckduckapi = {

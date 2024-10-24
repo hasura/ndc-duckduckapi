@@ -8,9 +8,10 @@
     "watch": "nodemon --watch \"./**\" --ext \"ts,json\" --exec \"ts-node index.ts serve --configuration=."
   },
   "dependencies": {
-    "@hasura/ndc-duckduckapi": "*",
+    "@hasura/ndc-lambda-sdk": "^1.8.0",
+    "@tsconfig/node20": "^20.1.4",
     "ts-node": "^10.9.2",
-    "@tsconfig/node20": "^20.1.4"
+    "@hasura/ndc-duckduckapi": "*"
   },
   "devDependencies": {
     "dotenv-cli": "^7.4.2"

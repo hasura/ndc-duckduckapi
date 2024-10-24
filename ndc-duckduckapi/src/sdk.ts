@@ -3,4 +3,6 @@ export {
   makeConnector,
   duckduckapi,
   db,
-} from "../../ndc-duckduckapi/src/duckduckapi";
+  getTokensFromHeader,
+} from "./duckduckapi";
+export { CalendarSyncManager } from "./google-calendar-sync";

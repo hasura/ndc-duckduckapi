@@ -108,6 +108,8 @@ export async function makeConnector(
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
 
+      console.log("#####", dda.functionsFilePath);
+
       // Load functions configuration
       // We need to try imporing the functions code via require before doing schema inference because
       // during watch mode we need it to be registered in the watching system so when the files are

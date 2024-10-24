@@ -1,6 +1,6 @@
 import { JSONValue } from "@hasura/ndc-lambda-sdk";
-import { CalendarSyncManager } from "../../ndc-duckduckapi/src/google-calendar-sync";
-import { getTokensFromHeader } from "../../ndc-duckduckapi/src/duckduckapi";
+import { CalendarSyncManager } from "@hasura/ndc-duckduckapi";
+import { getTokensFromHeader } from "@hasura/ndc-duckduckapi";
 
 export let loaderStatus: string = "stopped";
 
