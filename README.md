@@ -46,8 +46,9 @@ To test this connector, you'll want to run a supergraph project that uses this c
             additional: {}
 ```  
 5. `ddn connector-link update dda`
-6. `ddn supergraph build local`
-7. `ddn run docker-start`
+6. `ddn connector-link add-resources dda`
+7. `ddn supergraph build local`
+8. `ddn run docker-start`
 
 ### Publishing
 
