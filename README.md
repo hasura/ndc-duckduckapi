@@ -34,11 +34,20 @@ This repo is both a connector and an npm SDK. This makes the dev lifecycle a lit
 
 To test this connector, you'll want to run a supergraph project that uses this connector as an HTTP connector:
 1. Outside of this repo, `ddn supergraph init test-proj`
-2. `ddn connector-link add dda --configure-host=http://localhost:9094`
+2. `ddn connector-link add dda --configure-host=http://local.hasura.dev:9094`
 3. Make sure to remove the Authorization headers from the `dda.hml`
-4. `ddn connector-link update dda`
-5. `ddn supergraph build local`
-6. `ddn run docker-start`
+4. Make sure to add argumentPresets to dda.hml
+ ```argumentPresets:
+      - argument: headers
+        value:
+          httpHeaders:
+            forward:
+              - X-Hasura-Oauth-Services
+            additional: {}
+```  
+5. `ddn connector-link update dda`
+6. `ddn supergraph build local`
+7. `ddn run docker-start`
 
 ### Publishing
 
