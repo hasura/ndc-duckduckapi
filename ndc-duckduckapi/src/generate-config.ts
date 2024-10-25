@@ -142,8 +142,11 @@ export async function generateConfig(
       const columnName = table.column_names[i];
       objectTypes[tableName]["fields"][columnName] = {
         type: {
-          type: "named",
-          name: determineType(table.column_types[i]),
+          type: "nullable",
+          underlying_type: {
+            type: "named",
+            name: determineType(table.column_types[i]),
+          },
         },
         description: columnCommentMap.get(tableName)?.get(columnName) || "No description available"
       };
