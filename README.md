@@ -14,32 +14,39 @@ Ofcourse, the tradeoff is that the data will only be eventually consistent becau
 
 ## Contributing
 
+This repo is both a connector and an npm SDK. This makes the dev lifecycle a little interesting to set up. 
+
+### Development
 1. Clone this repo
-2. Setup: `npm i`
-3. Run: `NODE_OPTIONS="--max-old-space-size=4096" HASURA_SERVICE_TOKEN_SECRET=secrettoken HASURA_CONNECTOR_PORT=9094 npx ts-node ./src/index.ts serve --configuration=.`
-4. Remove `duck.db` and `duck.db.wal` from `.gitignore` if you'd like
-5. Create a new DDN project with this running as a custom HTTP connector to test
+2. `cd ndc-duckduckapi`
+3. `npm i`
+4. `npm run build`
+5. From the root folder of this project: `cd connector-definition/template`
+6. Make sure your package.json is using the `ndc-duckduckapi` sdk through a file URI for local dev:
+   ```
+   ....
+    "@hasura/ndc-duckduckapi": "file:///../../ndc-duckduckapi"
+   ...
+   ````
+7. Now run: `npm install`
+8. And now, run the connector: `HASURA_CONNECTOR_PORT=9094 npm run start`
+9. Verify that everything is running by hitting `localhost:9094/schema` and you should see a google-calendar NDC schema
 
-```bash
-ddn supergraph init new-project
-ddn connector-link add myapi --configure-host http://local.hasura.dev:9094 --configure-connector-token secrettoken
-cat <<EOF >> app/metadata/myapi.hml
-  argumentPresets:
-    - argument: headers
-      value:
-        httpHeaders:
-          forward:
-            - "*"
-          additional: {}
-EOF
-ddn connector-link update myapi
-ddn models add myapi '*'
-ddn commands add myapi '*'
-ddn supergraph build local
-ddn run docker-start
-ddn console --local
-```
+To test this connector, you'll want to run a supergraph project that uses this connector as an HTTP connector:
+1. Outside of this repo, `ddn supergraph init test-proj`
+2. `ddn connector-link add dda --configure-host=http://localhost:9094`
+3. `ddn connector-link update dda`
+4. `ddn supergraph build local`
+5. `ddn run docker-start`
 
+### Publishing
+
+1. Submit a PR and once its merged to main, tag it with a version and everything else is magic
+2. `git tag v0.1.6`
+
+Then update NDC Hub:
+- TODO: Action coming soon
+   
 -------------
 
 ## User guide
