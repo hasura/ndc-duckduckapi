@@ -12,13 +12,13 @@ This DuckDuckAPI connector allows you to easily build a high-performing connecto
 This allows a GraphQL or PromptQL query to run against API data in a highly flexible way without performance or rate limiting issues.
 Ofcourse, the tradeoff is that the data will only be eventually consistent because writes will reflect in subsequent reads only after the API data gets updated in DuckDB (via the loader script).
 
-## Get started
+## Contributing
 
 1. Clone this repo
 2. Setup: `npm i`
 3. Run: `NODE_OPTIONS="--max-old-space-size=4096" HASURA_SERVICE_TOKEN_SECRET=secrettoken HASURA_CONNECTOR_PORT=9094 npx ts-node ./src/index.ts serve --configuration=.`
 4. Remove `duck.db` and `duck.db.wal` from `.gitignore` if you'd like
-5. Create a new DDN project using the duckduckapi connector:
+5. Create a new DDN project with this running as a custom HTTP connector to test
 
 ```bash
 ddn supergraph init new-project
@@ -40,13 +40,50 @@ ddn run docker-start
 ddn console --local
 ```
 
-## How to build an API integration
+-------------
 
-_TODO:_
+## User guide
+
+### How to add this to your DDN project
+
+#### 1. Create a project
+```
+ddn supergraph init myproject
+ddn connector init -i
+>>> choose hasura/duckduckapi
+>>> set name to myconnector
+ddn connector introspect myconnector
+ddn models add myconnector '*'
+ddn commands add myconnector '*'
+
+# For local dev
+ddn supergraph build local
+ddn run docker-start
+ddn console --local
+
+# For deploying to cloud
+ddn supergraph build create
+ddn console
+```
+
+#### 2. Run jobs via the console and start querying API data from DuckDB!
+
+Head to the OAuth Playground on the console.
+1. Login (or add a new oauth2 provider) to your SaaS service
+2. Start the loader job by hitting Run
+
+---------------------------
+ 
+### How to build an API integration
+
+1. Set up a `schema.sql`. This will be run on startup and will initialize the duckdb schema. Refer the example in index.ts for details
+2. Add loader functions in `functions.ts` and follow the examples to build
 
 To test, run the ts connector and refresh the supergraph project (step 3 onwards in the Get Started above).
 
-## Configure API access with OAuth2
+----------------------------
+
+### How to add a custom OAuth2 provider
 
 _TODO:_
 
