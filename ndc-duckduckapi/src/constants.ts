@@ -174,6 +174,49 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
       },
     },
   },
+  Timestamp: {
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: {
+        type: "equal",
+      },
+      _gt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _lt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _gte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _lte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+      _neq: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Timestamp",
+        },
+      },
+    },
+  },
   Boolean: {
     aggregate_functions: {},
     comparison_operators: {

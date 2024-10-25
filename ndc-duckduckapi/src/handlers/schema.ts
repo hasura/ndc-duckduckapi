@@ -21,6 +21,7 @@ export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functions
         type: cn,
         uniqueness_constraints: {},
         foreign_keys: {},
+        description: object_types[cn].description
       });
     }
   });
@@ -31,8 +32,10 @@ export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functions
   for (const [key, value] of Object.entries(functionsNDCSchema.scalar_types)) {
     if (key in mergedScalarTypes) {
       console.log(`Overlapping key found: ${key}`);
+    } else {
+      // This was breaking the scalar types.. Not sure if the merge will work properly.
+      mergedScalarTypes[key] = value;
     }
-    mergedScalarTypes[key] = value;
   }
 
   // Let's merge the object types from DuckDB and TS Lambda
@@ -40,6 +43,7 @@ export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functions
     ...duckdbconfig.object_types,
   };
 
+  // Whatever this is will probably break if there are actually overlapping types.. I think?
   for (const [key, value] of Object.entries(functionsNDCSchema.object_types)) {
     if (key in mergedObjectTypes) {
       console.log(`Overlapping key found: ${key}`);

@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 
 COMMENT ON TABLE calendar_events IS 'This table contains events from google calendar. While querying this table keep the following in mind. 1) The title of the event is stored in the summary field. 2) typically add a filter to remove cancelled events by checking status != ''cancelled'', and similarly remove deleted events by check if status != ''deleted''.';
 
+COMMENT ON COLUMN calendar_events.summary IS 'Title/subject of the calendar event';
+COMMENT ON COLUMN calendar_events.start_time IS 'Start time of the event in timestamp format';
+COMMENT ON COLUMN calendar_events.end_time IS 'End time of the event in timestamp format';
 
 CREATE TABLE IF NOT EXISTS sync_state (
   calendar_id VARCHAR PRIMARY KEY,
@@ -49,6 +52,8 @@ CREATE TABLE IF NOT EXISTS sync_state (
 );
 
 COMMENT ON TABLE sync_state IS 'This table contains the sync state for the calendar job. This is not a table that would typically be queried. The sync_token is used to sync incremental changes from the google calendar API.';
+
+
 `
 
 interface CalendarEvent {
