@@ -163,10 +163,10 @@ export class SyncManager {
     } else {
       loadedCredentials = credentials;
       if (loadedCredentials.refresh_token && loadedCredentials.expires_in && loadedCredentials.client_id && loadedCredentials.client_secret) {
-        await asyncDBRun("BEGIN TRANSACTION");
-        await asyncDBRun("DELETE FROM calendar_oauth2_client");
-        await asyncDBRun("INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?)", JSON.stringify(credentials));
-        await asyncDBRun("COMMIT");
+        await asyncDBRun('BEGIN TRANSACTION;');
+        await asyncDBRun('DELETE FROM calendar_oauth2_client;');
+        await asyncDBRun('INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+        await asyncDBRun('COMMIT;');
       }
     }
 
@@ -178,23 +178,53 @@ export class SyncManager {
     return instance;
   }
 
+  private async saveCredentials({access_token, refresh_token, expires_in}: {access_token: string | null | undefined, refresh_token: string | null | undefined, expires_in: number | null | undefined}): Promise<void> {
+      const credentials = {
+        access_token,
+        refresh_token,
+        expires_in,
+        client_id: this.credentials.client_id,
+        client_secret: this.credentials.client_secret,
+      }
+      console.log('GoogleCalendarLoader.Auth:: ' + 'Saving new set of credentials' + JSON.stringify(credentials));
+      if (credentials.refresh_token && credentials.expires_in && credentials.client_id && credentials.client_secret) {
+        await asyncDBRun('BEGIN TRANSACTION;');
+        await asyncDBRun('DELETE FROM calendar_oauth2_client;');
+        await asyncDBRun('INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+        await asyncDBRun('COMMIT;');
+      }
+  }
+
   private async initializeAuth(): Promise<void> {
     if (this.credentials?.client_id && this.credentials?.client_secret && this.credentials?.refresh_token && this.credentials?.expires_in) {
-     this.auth = new OAuth2Client({
+      this.auth = new OAuth2Client({
         clientId: this.credentials.client_id,
         clientSecret: this.credentials.client_secret,
-        eagerRefreshThresholdMillis: 1000 * 60 // 60 seconds 
+        eagerRefreshThresholdMillis: 1000 // 60 seconds 
       });
     } else {
       this.auth = new OAuth2Client();
     }
 
-      this.auth.setCredentials({
+    this.auth.setCredentials({
       access_token: this.credentials.access_token,
       refresh_token: this.credentials.refresh_token,
-      expiry_date: this.credentials.expires_in ? Date.now() + this.credentials.expires_in * 1000 : undefined
+      expiry_date:  Date.now() + 3000 
+      // expiry_date: this.credentials.expires_in ? Date.now() + this.credentials.expires_in * 1000 : undefined
     });
+
     this.calendar = google.calendar({ version: "v3", auth: this.auth });
+  
+    this.auth.on('tokens', (tokens) => {
+      this.saveCredentials({
+        access_token: tokens?.access_token, 
+        refresh_token: this.credentials.refresh_token, 
+        expires_in: tokens?.expiry_date ? ((tokens.expiry_date - Date.now()) / 1000) : undefined
+      });
+      console.log('GoogleCalendarLoader.Auth:: ' + 'Refreshed token saved.');
+    });
+
+    // this.auth.refreshAccessToken();
   }
 
   async test(): Promise<string> {
@@ -214,6 +244,7 @@ export class SyncManager {
       calendarAccessResult =
         "No items received in test fetch. Starting loader anyway...";
     }
+    console.log('GoogleCalendarLoader:: ' + calendarAccessResult);
     return calendarAccessResult;
   }
 
@@ -221,10 +252,12 @@ export class SyncManager {
     
     // Test access to calendar by fetching one event
     this.loaderState.state = "Testing google-calendar access...";
+    console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
     try {
       this.loaderState.state = await this.test();
     } catch (error) {
       this.loaderState.state = `Error in testing google-calendar access: ${error}. Have you logged in to google-calendar?`;
+      console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
       return this.loaderState.state;
     }
   
@@ -255,7 +288,7 @@ export class SyncManager {
           clearInterval(this.syncInterval);
         }
       },
-      this.syncIntervalMinutes * 60 * 1000,
+      this.syncIntervalMinutes * 30000,
     );
   }
 
@@ -266,7 +299,6 @@ export class SyncManager {
       let syncState, pageToken, syncToken;
 
       do {
-        await asyncDBRun("BEGIN TRANSACTION");
 
         syncState = await this.getSyncState(calendarId);
         syncToken = syncState?.sync_token;
@@ -283,8 +315,11 @@ export class SyncManager {
           throw new Error("Failed to fetch events. Job will be paused and require manual restart. Status: " + response.status + ': ' + response.statusText);
         }
 
+        // Begin transaction to save events and update sync state
+        await asyncDBRun("BEGIN TRANSACTION");
+
         if (response.data.items) {
-          console.log("Fetched " + response.data.items.length + " events.");
+          console.log('GoogleCalendarLoader:: ' + "Fetched " + response.data.items.length + " events.");
           await this.incrementallySaveEventsFromSyncResponse(response.data.items, calendarId);
         }
 
@@ -295,7 +330,9 @@ export class SyncManager {
         }
 
         await asyncDBRun("COMMIT");
-        console.log("Processed " + response.data.items?.length + " events & updated sync state.");
+        // Commit transaction to save events and update sync state
+
+        console.log('GoogleCalendarLoader:: ' + "Processed " + response.data.items?.length + " events & updated sync state.");
       } while (pageToken);
 
       debugLog(`Completed incremental sync for calendar: ${calendarId}`);
@@ -304,12 +341,12 @@ export class SyncManager {
       await asyncDBRun("ROLLBACK");
 
       if (this.isInvalidSyncTokenError(error)) {
-        console.log("Sync token invalid.");
+        console.log('GoogleCalendarLoader:: ' + "Sync token invalid.");
         await this.performFullSync(calendarId);
-        console.log("Restarting incremental sync.");
+        console.log('GoogleCalendarLoader:: ' + "Restarting incremental sync.");
         this.startPeriodicSync();
       } else {
-        console.log("Unable to process events. " + error);
+        console.log('GoogleCalendarLoader:: ' + "Unable to process events. " + error);
         throw error; 
       }
     }
@@ -338,7 +375,7 @@ export class SyncManager {
             const result = await asyncDBAll("DELETE FROM calendar_events WHERE id = ?", event.id);
             debugLog("Deleted event: " + JSON.stringify(result));
           } catch (error) {
-            console.log('Error deleting single event: ' + error);
+            console.log('GoogleCalendarLoader:: ' + 'Error deleting single event: ' + error);
           }
         }
       } else {
@@ -518,7 +555,7 @@ export class SyncManager {
         ];
 
         const result: any = await asyncDBAll(stmt, ...values);
-        console.log("Rows inserted: " + result.length);
+        console.log('GoogleCalendarLoader:: ' + "Rows inserted: " + result.length);
         
       } catch (error) {
         debugLog(values);
@@ -535,14 +572,14 @@ export class SyncManager {
       await asyncDBRun("BEGIN TRANSACTION");
 
       const clearEvents: any = await asyncDBAll("DELETE FROM calendar_events WHERE calendar_id = ?", calendarId);
-      console.log("Truncated rows before full sync: " + clearEvents.length);
+      console.log('GoogleCalendarLoader:: ' + "Truncated rows before full sync: " + clearEvents.length);
 
       const clearSyncState: any = await asyncDBAll("DELETE FROM sync_state WHERE calendar_id = ?", calendarId);
-      console.log("Deleted sync state: " + clearSyncState.length);
+      console.log('GoogleCalendarLoader:: ' + "Deleted sync state: " + clearSyncState.length);
 
       await asyncDBRun("COMMIT");
     } catch (error) {
-      console.log('Error in resetting calendar state: ' + error);
+      console.log('GoogleCalendarLoader:: ' + 'Error in resetting calendar state: ' + error);
       await asyncDBRun("ROLLBACK");
       throw error;
     }
@@ -570,7 +607,7 @@ export class SyncManager {
     try {
       await asyncDBAll(`INSERT OR REPLACE INTO sync_state (calendar_id, sync_token, last_sync)
          VALUES (?, ?, CURRENT_TIMESTAMP)`, calendarId, syncToken);
-      console.log('Sync state updated: ' + syncToken + ': ' + calendarId);
+      console.log('GoogleCalendarLoader:: ' + 'Sync state updated: ' + syncToken + ': ' + calendarId);
     } catch (err) {
       debugLog(err);
       throw err;
