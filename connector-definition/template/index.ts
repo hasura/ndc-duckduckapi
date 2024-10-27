@@ -2,7 +2,7 @@
 import { start } from "@hasura/ndc-duckduckapi";
 import { makeConnector, duckduckapi } from "@hasura/ndc-duckduckapi";
 import * as path from "path";
-import { GoogleCalendar } from "@hasura/ndc-duckduckapi/services";
+import { GoogleCalendar, GMail} from "@hasura/ndc-duckduckapi/services";
 
 const connectorConfig: duckduckapi = {
   dbSchema: `
@@ -11,7 +11,8 @@ const connectorConfig: duckduckapi = {
     -- This SQL will be run on startup every time.
     -- CREATE TABLE SAAS_TABLE_NAME (.....);
 
-  ` + GoogleCalendar.schema,
+  ` + GoogleCalendar.schema 
+    + GMail.schema,
   functionsFilePath: path.resolve(__dirname, "./functions.ts"),
 };
  
