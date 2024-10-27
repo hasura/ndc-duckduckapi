@@ -2,21 +2,32 @@ import { JSONValue } from "@hasura/ndc-lambda-sdk";
 import { GoogleCalendar } from "@hasura/ndc-duckduckapi/services";
 import { getOAuthCredentialsFromHeader } from "@hasura/ndc-duckduckapi";
 
+
 /***********************************************************************************/
 /************************** BUILT-IN EXAMPLES **************************************/
 /***********************************************************************************/
 
 /* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
 const calendarLoaderState = {
-  state: 'stopped'
-}
+  state: 'Stopped'
+};
+
+(async () => {
+  try {
+    console.log("Trying to initialize calendar loader in case credentials are already available");
+    const calendarSyncManager = await GoogleCalendar.syncManager.create(calendarLoaderState, 1);
+    await calendarSyncManager.initialize();
+  } catch (error) {
+    console.error(error);
+  }
+})();
 
 /**
  * $ddn.jobs.calendar-loader.init
  */
 export async function __dda_calendar_loader_init(headers: JSONValue): Promise<string> {
 
-  if (calendarLoaderState.state === "running") {
+  if (calendarLoaderState.state == "Running") {
     return calendarLoaderState.state;
   }
 
@@ -29,16 +40,15 @@ export async function __dda_calendar_loader_init(headers: JSONValue): Promise<st
     return calendarLoaderState.state;
   }
 
-  const syncManager = new GoogleCalendar.syncManager (
-    credentials['google-calendar'].access_token,
+  const syncManager = await GoogleCalendar.syncManager.create (
+    calendarLoaderState,
     1, // sync every minute
-    calendarLoaderState
+    credentials['google-calendar']
   );
 
   return await syncManager.initialize();
- 
-}
 
+}
 /**
  *  $ddn.jobs.calendar-loader.status
  *
@@ -53,7 +63,7 @@ export function __dda_calendar_loader_status(): string {
 /**********************************************************************************************/
 
 const myLoaderState = {
-  state: 'unimplemented'
+  state: 'This is an unimplemented loader. Edit it in functions.ts.'
 }
 
 /**
@@ -107,6 +117,13 @@ export function __dda_my_loader_status(): string {
 /*******************************************************************************************/
 /* Some other examples of custom actions you want to provide or APIs you want to wrap over */
 /*******************************************************************************************/
+
+/** @readonly */
+export function testCalendar(headers: JSONValue): JSONValue {
+  return new JSONValue({
+    success: true
+  });
+}
 
 /** @readonly */
 export function hello(name: string, year: number): string {
