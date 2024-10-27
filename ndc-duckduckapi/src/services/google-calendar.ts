@@ -115,7 +115,7 @@ interface CalendarEvent {
   transparency: string | null;
   visibility: string | null;
   ical_uid: string;
-  attendees: string | null;
+  attendees: calendar_v3.Schema$EventAttendee[] | null;
   reminders: string | null;
   conference_data: string | null;
   color_id: string | null;
