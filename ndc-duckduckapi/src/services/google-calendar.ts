@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   is_all_day BOOLEAN
 );
 
-CREATE SEQUENCE event_attendee_id START 1;
+CREATE SEQUENCE IF NOT EXISTS event_attendee_id START 1;
 
 CREATE TABLE IF NOT EXISTS event_attendees (
   id INTEGER PRIMARY KEY DEFAULT nextval('event_attendee_id'),
@@ -537,7 +537,7 @@ export class SyncManager {
     for (const event of events) {
       try {
         // Create placeholders only for this chunk
-        const placeholders = Array(31).fill("?").join(",");
+        const placeholders = Array(30).fill("?").join(",");
         const stmt = `
             INSERT OR REPLACE INTO calendar_events (
               id,
@@ -556,7 +556,6 @@ export class SyncManager {
               transparency,
               visibility,
               ical_uid,
-              attendees,
               reminders,
               conference_data,
               color_id,
@@ -590,7 +589,6 @@ export class SyncManager {
           event.transparency,
           event.visibility,
           event.ical_uid,
-          event.attendees,
           event.reminders,
           event.conference_data,
           event.color_id,
