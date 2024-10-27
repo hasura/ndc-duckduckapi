@@ -45,11 +45,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   status VARCHAR,
   location VARCHAR,
   recurring_event_id VARCHAR,
-  recurrence JSON, 
+  recurrence JSON,
   transparency VARCHAR,
   visibility VARCHAR,
   ical_uid VARCHAR,
-  attendees JSON,
   reminders JSON,
   conference_data JSON,
   color_id VARCHAR,
@@ -65,6 +64,25 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   last_synced TIMESTAMP WITH TIME ZONE,
   is_all_day BOOLEAN
 );
+
+CREATE SEQUENCE IF NOT EXISTS event_attendee_id START 1;
+
+CREATE TABLE IF NOT EXISTS event_attendees (
+  id INTEGER PRIMARY KEY DEFAULT nextval('event_attendee_id'),
+  event_id VARCHAR,
+  email VARCHAR,
+  display_name VARCHAR,
+  organizer BOOLEAN,
+  self BOOLEAN,
+  resource BOOLEAN,
+  optional BOOLEAN,
+  response_status VARCHAR,
+  comment TEXT,
+  additional_guests INTEGER,
+  FOREIGN KEY (event_id) REFERENCES calendar_events(id)
+);
+
+COMMENT ON TABLE event_attendees IS 'This table contains attendees of a calendar event';
 
 COMMENT ON TABLE calendar_events IS 'This table contains events from google calendar. While querying this table keep the following in mind. 1) The title of the event is stored in the summary field. 2) typically add a filter to remove cancelled events by checking status != ''cancelled'' ';
 
@@ -99,7 +117,7 @@ interface CalendarEvent {
   transparency: string | null;
   visibility: string | null;
   ical_uid: string;
-  attendees: string | null;
+  attendees: calendar_v3.Schema$EventAttendee[] | null;
   reminders: string | null;
   conference_data: string | null;
   color_id: string | null;
@@ -199,7 +217,7 @@ export class SyncManager {
       this.auth = new OAuth2Client({
         clientId: this.credentials.client_id,
         clientSecret: this.credentials.client_secret,
-        eagerRefreshThresholdMillis: 1000 // 60 seconds 
+        eagerRefreshThresholdMillis: 1000 // 60 seconds
       });
     } else {
       this.auth = new OAuth2Client();
@@ -208,16 +226,16 @@ export class SyncManager {
     this.auth.setCredentials({
       access_token: this.credentials.access_token,
       refresh_token: this.credentials.refresh_token,
-      expiry_date:  Date.now() + 3000 
+      expiry_date:  Date.now() + 3000
       // expiry_date: this.credentials.expires_in ? Date.now() + this.credentials.expires_in * 1000 : undefined
     });
 
     this.calendar = google.calendar({ version: "v3", auth: this.auth });
-  
+
     this.auth.on('tokens', (tokens) => {
       this.saveCredentials({
-        access_token: tokens?.access_token, 
-        refresh_token: this.credentials.refresh_token, 
+        access_token: tokens?.access_token,
+        refresh_token: this.credentials.refresh_token,
         expires_in: tokens?.expiry_date ? ((tokens.expiry_date - Date.now()) / 1000) : undefined
       });
       console.log('GoogleCalendarLoader.Auth:: ' + 'Refreshed token saved.');
@@ -248,7 +266,7 @@ export class SyncManager {
   }
 
   async initialize(): Promise<string> {
-    
+
     // Test access to calendar by fetching one event
     this.loaderState.state = "Testing google-calendar access...";
     console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
@@ -259,7 +277,7 @@ export class SyncManager {
       console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
       return this.loaderState.state;
     }
-  
+
     debugLog("Initializing sync manager...");
     this.loaderState.state = "Running";
     this.startPeriodicSync();
@@ -268,7 +286,7 @@ export class SyncManager {
       await this.cleanup();
       process.exit(0);
     });
-  
+
     return this.loaderState.state;
   }
 
@@ -346,7 +364,7 @@ export class SyncManager {
         this.startPeriodicSync();
       } else {
         console.log('GoogleCalendarLoader:: ' + "Unable to process events. " + error);
-        throw error; 
+        throw error;
       }
     }
   }
@@ -355,7 +373,7 @@ export class SyncManager {
     events: calendar_v3.Schema$Event[],
     calendarId: string,
   ): Promise<void> {
-  
+
     for (const event of events) {
       const formattedEvent = this.formatEventData(event, calendarId, new Date().toISOString());
       if (event.status === "cancelled") {
@@ -371,6 +389,8 @@ export class SyncManager {
         else {
           // Delete this single event
           try {
+            const attendees = await asyncDBAll("DELETE FROM event_attendees WHERE event_id = ?", event.id);
+            debugLog("Deleted event attendees: " + JSON.stringify(attendees));
             const result = await asyncDBAll("DELETE FROM calendar_events WHERE id = ?", event.id);
             debugLog("Deleted event: " + JSON.stringify(result));
           } catch (error) {
@@ -449,7 +469,7 @@ export class SyncManager {
       transparency: event.transparency || null,
       visibility: event.visibility || null,
       ical_uid: event.iCalUID || "",
-      attendees: event.attendees ? JSON.stringify(event.attendees) : null,
+      attendees: event.attendees || null,
       reminders: event.reminders ? JSON.stringify(event.reminders) : null,
       conference_data: event.conferenceData
         ? JSON.stringify(event.conferenceData)
@@ -476,6 +496,40 @@ export class SyncManager {
     };
   }
 
+  private async insertAttendees(eventId: string, attendees: calendar_v3.Schema$EventAttendee[]): Promise<void> {
+    if (!attendees || attendees.length === 0) return;
+
+    for (const attendee of attendees) {
+      const stmt = `
+        INSERT INTO event_attendees (
+          event_id,
+          email,
+          display_name,
+          organizer,
+          self,
+          resource,
+          optional,
+          response_status,
+          comment,
+          additional_guests
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      await asyncDBAll(stmt,
+        eventId,
+        attendee.email || null,
+        attendee.displayName || null,
+        attendee.organizer || false,
+        attendee.self || false,
+        attendee.resource || false,
+        attendee.optional || false,
+        attendee.responseStatus || null,
+        attendee.comment || null,
+        attendee.additionalGuests || null
+      );
+    }
+  }
+
   private async insertEventsBatch(events: CalendarEvent[]): Promise<void> {
     if (events.length === 0) return;
 
@@ -483,7 +537,7 @@ export class SyncManager {
     for (const event of events) {
       try {
         // Create placeholders only for this chunk
-        const placeholders = Array(31).fill("?").join(",");
+        const placeholders = Array(30).fill("?").join(",");
         const stmt = `
             INSERT OR REPLACE INTO calendar_events (
               id,
@@ -502,7 +556,6 @@ export class SyncManager {
               transparency,
               visibility,
               ical_uid,
-              attendees,
               reminders,
               conference_data,
               color_id,
@@ -536,7 +589,6 @@ export class SyncManager {
           event.transparency,
           event.visibility,
           event.ical_uid,
-          event.attendees,
           event.reminders,
           event.conference_data,
           event.color_id,
@@ -555,7 +607,10 @@ export class SyncManager {
 
         const result: any = await asyncDBAll(stmt, ...values);
         console.log('GoogleCalendarLoader:: ' + "Rows inserted: " + result.length);
-        
+        if (event.id && event.attendees) {
+          await this.insertAttendees(event.id, event.attendees);
+        }
+
       } catch (error) {
         debugLog(values);
         console.error(`Error inserting event:`, error);
@@ -569,6 +624,14 @@ export class SyncManager {
     debugLog(`Resetting calendar: ${calendarId}`);
     try {
       await asyncDBRun("BEGIN TRANSACTION");
+
+      // First delete attendees for all events in this calendar
+      const clearAttendees: any = await asyncDBAll(`
+        DELETE FROM event_attendees
+        WHERE event_id IN (
+          SELECT id FROM calendar_events WHERE calendar_id = ?
+        )`, calendarId);
+      console.log('GoogleCalendarLoader:: ' + "Deleted attendees before full sync: " + clearAttendees.length);
 
       const clearEvents: any = await asyncDBAll("DELETE FROM calendar_events WHERE calendar_id = ?", calendarId);
       console.log('GoogleCalendarLoader:: ' + "Truncated rows before full sync: " + clearEvents.length);
