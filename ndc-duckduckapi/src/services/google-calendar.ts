@@ -65,8 +65,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   is_all_day BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS calendar_attendees (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+CREATE SEQUENCE event_attendee_id START 1;
+
+CREATE TABLE IF NOT EXISTS event_attendees (
+  id INTEGER PRIMARY KEY DEFAULT nextval('event_attendee_id'),
   event_id VARCHAR,
   email VARCHAR,
   display_name VARCHAR,
@@ -77,10 +79,10 @@ CREATE TABLE IF NOT EXISTS calendar_attendees (
   response_status VARCHAR,
   comment TEXT,
   additional_guests INTEGER,
-  FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+  FOREIGN KEY (event_id) REFERENCES calendar_events(id)
 );
 
-COMMENT ON TABLE calendar_attendees IS 'This table contains attendees of a calendar event';
+COMMENT ON TABLE event_attendees IS 'This table contains attendees of a calendar event';
 
 COMMENT ON TABLE calendar_events IS 'This table contains events from google calendar. While querying this table keep the following in mind. 1) The title of the event is stored in the summary field. 2) typically add a filter to remove cancelled events by checking status != ''cancelled'' ';
 
@@ -387,6 +389,8 @@ export class SyncManager {
         else {
           // Delete this single event
           try {
+            const attendees = await asyncDBAll("DELETE FROM event_attendees WHERE event_id = ?", event.id);
+            debugLog("Deleted event attendees: " + JSON.stringify(attendees));
             const result = await asyncDBAll("DELETE FROM calendar_events WHERE id = ?", event.id);
             debugLog("Deleted event: " + JSON.stringify(result));
           } catch (error) {
@@ -497,7 +501,7 @@ export class SyncManager {
 
     for (const attendee of attendees) {
       const stmt = `
-        INSERT INTO calendar_attendees (
+        INSERT INTO event_attendees (
           event_id,
           email,
           display_name,
@@ -622,6 +626,14 @@ export class SyncManager {
     debugLog(`Resetting calendar: ${calendarId}`);
     try {
       await asyncDBRun("BEGIN TRANSACTION");
+
+      // First delete attendees for all events in this calendar
+      const clearAttendees: any = await asyncDBAll(`
+        DELETE FROM event_attendees
+        WHERE event_id IN (
+          SELECT id FROM calendar_events WHERE calendar_id = ?
+        )`, calendarId);
+      console.log('GoogleCalendarLoader:: ' + "Deleted attendees before full sync: " + clearAttendees.length);
 
       const clearEvents: any = await asyncDBAll("DELETE FROM calendar_events WHERE calendar_id = ?", calendarId);
       console.log('GoogleCalendarLoader:: ' + "Truncated rows before full sync: " + clearEvents.length);
