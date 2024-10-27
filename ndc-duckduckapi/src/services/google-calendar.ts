@@ -606,7 +606,7 @@ export class SyncManager {
         const result: any = await asyncDBAll(stmt, ...values);
         console.log('GoogleCalendarLoader:: ' + "Rows inserted: " + result.length);
         if (event.id && event.attendees) {
-          await this.insertAttendees(event.id, attendees);
+          await this.insertAttendees(event.id, event.attendees);
         }
 
       } catch (error) {
