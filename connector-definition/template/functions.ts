@@ -18,6 +18,7 @@ const calendarLoaderState = {
     const calendarSyncManager = await GoogleCalendar.syncManager.create(calendarLoaderState, 1);
     await calendarSyncManager.initialize();
   } catch (error) {
+    calendarLoaderState.state = `Stopped`;
     console.error(error);
   }
 })();

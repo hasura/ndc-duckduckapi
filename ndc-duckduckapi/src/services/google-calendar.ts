@@ -186,7 +186,6 @@ export class SyncManager {
         client_id: this.credentials.client_id,
         client_secret: this.credentials.client_secret,
       }
-      console.log('GoogleCalendarLoader.Auth:: ' + 'Saving new set of credentials' + JSON.stringify(credentials));
       if (credentials.refresh_token && credentials.expires_in && credentials.client_id && credentials.client_secret) {
         await asyncDBRun('BEGIN TRANSACTION;');
         await asyncDBRun('DELETE FROM calendar_oauth2_client;');
