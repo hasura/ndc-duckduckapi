@@ -45,11 +45,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   status VARCHAR,
   location VARCHAR,
   recurring_event_id VARCHAR,
-  recurrence JSON, 
+  recurrence JSON,
   transparency VARCHAR,
   visibility VARCHAR,
   ical_uid VARCHAR,
-  attendees JSON,
   reminders JSON,
   conference_data JSON,
   color_id VARCHAR,
@@ -65,6 +64,23 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   last_synced TIMESTAMP WITH TIME ZONE,
   is_all_day BOOLEAN
 );
+
+CREATE TABLE IF NOT EXISTS calendar_attendees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id VARCHAR,
+  email VARCHAR,
+  display_name VARCHAR,
+  organizer BOOLEAN,
+  self BOOLEAN,
+  resource BOOLEAN,
+  optional BOOLEAN,
+  response_status VARCHAR,
+  comment TEXT,
+  additional_guests INTEGER,
+  FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE calendar_attendees IS 'This table contains attendees of a calendar event';
 
 COMMENT ON TABLE calendar_events IS 'This table contains events from google calendar. While querying this table keep the following in mind. 1) The title of the event is stored in the summary field. 2) typically add a filter to remove cancelled events by checking status != ''cancelled'' ';
 
@@ -199,7 +215,7 @@ export class SyncManager {
       this.auth = new OAuth2Client({
         clientId: this.credentials.client_id,
         clientSecret: this.credentials.client_secret,
-        eagerRefreshThresholdMillis: 1000 // 60 seconds 
+        eagerRefreshThresholdMillis: 1000 // 60 seconds
       });
     } else {
       this.auth = new OAuth2Client();
@@ -208,16 +224,16 @@ export class SyncManager {
     this.auth.setCredentials({
       access_token: this.credentials.access_token,
       refresh_token: this.credentials.refresh_token,
-      expiry_date:  Date.now() + 3000 
+      expiry_date:  Date.now() + 3000
       // expiry_date: this.credentials.expires_in ? Date.now() + this.credentials.expires_in * 1000 : undefined
     });
 
     this.calendar = google.calendar({ version: "v3", auth: this.auth });
-  
+
     this.auth.on('tokens', (tokens) => {
       this.saveCredentials({
-        access_token: tokens?.access_token, 
-        refresh_token: this.credentials.refresh_token, 
+        access_token: tokens?.access_token,
+        refresh_token: this.credentials.refresh_token,
         expires_in: tokens?.expiry_date ? ((tokens.expiry_date - Date.now()) / 1000) : undefined
       });
       console.log('GoogleCalendarLoader.Auth:: ' + 'Refreshed token saved.');
@@ -248,7 +264,7 @@ export class SyncManager {
   }
 
   async initialize(): Promise<string> {
-    
+
     // Test access to calendar by fetching one event
     this.loaderState.state = "Testing google-calendar access...";
     console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
@@ -259,7 +275,7 @@ export class SyncManager {
       console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
       return this.loaderState.state;
     }
-  
+
     debugLog("Initializing sync manager...");
     this.loaderState.state = "Running";
     this.startPeriodicSync();
@@ -268,7 +284,7 @@ export class SyncManager {
       await this.cleanup();
       process.exit(0);
     });
-  
+
     return this.loaderState.state;
   }
 
@@ -346,7 +362,7 @@ export class SyncManager {
         this.startPeriodicSync();
       } else {
         console.log('GoogleCalendarLoader:: ' + "Unable to process events. " + error);
-        throw error; 
+        throw error;
       }
     }
   }
@@ -355,7 +371,7 @@ export class SyncManager {
     events: calendar_v3.Schema$Event[],
     calendarId: string,
   ): Promise<void> {
-  
+
     for (const event of events) {
       const formattedEvent = this.formatEventData(event, calendarId, new Date().toISOString());
       if (event.status === "cancelled") {
@@ -449,7 +465,7 @@ export class SyncManager {
       transparency: event.transparency || null,
       visibility: event.visibility || null,
       ical_uid: event.iCalUID || "",
-      attendees: event.attendees ? JSON.stringify(event.attendees) : null,
+      attendees: event.attendees || null,
       reminders: event.reminders ? JSON.stringify(event.reminders) : null,
       conference_data: event.conferenceData
         ? JSON.stringify(event.conferenceData)
@@ -474,6 +490,40 @@ export class SyncManager {
       last_synced: timestamp,
       is_all_day: isAllDay,
     };
+  }
+
+  private async insertAttendees(eventId: string, attendees: calendar_v3.Schema$EventAttendee[]): Promise<void> {
+    if (!attendees || attendees.length === 0) return;
+
+    for (const attendee of attendees) {
+      const stmt = `
+        INSERT INTO calendar_attendees (
+          event_id,
+          email,
+          display_name,
+          organizer,
+          self,
+          resource,
+          optional,
+          response_status,
+          comment,
+          additional_guests
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      await asyncDBAll(stmt,
+        eventId,
+        attendee.email || null,
+        attendee.displayName || null,
+        attendee.organizer || false,
+        attendee.self || false,
+        attendee.resource || false,
+        attendee.optional || false,
+        attendee.responseStatus || null,
+        attendee.comment || null,
+        attendee.additionalGuests || null
+      );
+    }
   }
 
   private async insertEventsBatch(events: CalendarEvent[]): Promise<void> {
@@ -555,7 +605,10 @@ export class SyncManager {
 
         const result: any = await asyncDBAll(stmt, ...values);
         console.log('GoogleCalendarLoader:: ' + "Rows inserted: " + result.length);
-        
+        if (event.id && event.attendees) {
+          await this.insertAttendees(event.id, attendees);
+        }
+
       } catch (error) {
         debugLog(values);
         console.error(`Error inserting event:`, error);
