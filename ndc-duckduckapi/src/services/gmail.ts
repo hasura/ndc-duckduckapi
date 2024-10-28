@@ -42,15 +42,15 @@ CREATE TABLE IF NOT EXISTS gmail_messages (
   message_id VARCHAR,
   subject VARCHAR,
   from_address VARCHAR,
-  to_addresses JSON,
-  cc_addresses JSON,
-  bcc_addresses JSON,
-  date VARCHAR,
+  to_addresses TEXT,
+  cc_addresses TEXT,
+  bcc_addresses TEXT,
+  date TIMESTAMP WITH TIME ZONE,
   body_plain TEXT,
   body_html TEXT,
   attachment_count INTEGER,
-  attachments JSON,
-  headers JSON,
+  attachments TEXT,
+  headers TEXT,
   sync_status VARCHAR,
   last_synced TIMESTAMP WITH TIME ZONE,
   is_draft BOOLEAN,
@@ -385,7 +385,11 @@ export class SyncManager {
     const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value;
     const cc = headers.find(h => h.name?.toLowerCase() === 'cc')?.value;
     const bcc = headers.find(h => h.name?.toLowerCase() === 'bcc')?.value;
-    const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value;
+    const headerDate = headers.find(h => h.name?.toLowerCase() === 'date')?.value;
+    let date: string | null = null;
+    if (headerDate) {
+      date = new Date(headerDate).toISOString();
+    }
 
     const labelIds = message.labelIds || [];
     const attachments = this.extractAttachments(message.payload);
@@ -658,3 +662,4 @@ last_synced: new Date().toISOString(),
     await db.close();
   }
 }
+
