@@ -5,6 +5,7 @@ export const CAPABILITIES_RESPONSE: Capabilities = {
   query: {
     variables: {},
     nested_fields: {},
+    aggregates: {}
   },
   mutation: {
     transactional: null,
