@@ -5,3 +5,5 @@ export {
   db,
   getOAuthCredentialsFromHeader,
 } from "./duckduckapi";
+
+export { AsyncConnection } from "./duckdb-connection-manager";

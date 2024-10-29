@@ -493,13 +493,12 @@ export async function perform_query(
   state: State,
   query_plans: SQLQuery[],
 ): Promise<QueryResponse> {
-  const con = state.client.connect();
+  // const con = state.client.connect();
   const response: RowSet[] = [];
   for (let query_plan of query_plans) {
-    const res = await do_all(con, query_plan);
+    const res = await state.client.query(query_plan.sql);
     const row_set = JSON.parse(res[0]["data"] as string) as RowSet;
     response.push(row_set);
   }
-  con.close();
   return response;
 }

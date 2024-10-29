@@ -1,9 +1,10 @@
 export const GoogleCalendar = {
-    syncManager: require("./google-calendar").SyncManager,
-    schema: require("./google-calendar").Schema
+    SyncManager: require("./google-calendar").SyncManager,
+    Schema: require("./google-calendar").Schema,
+    CreateCalendarEvent: require("./google-calendar").createCalendarEvent
 }
 
 export const GMail = {
-    syncManager: require("./gmail").SyncManager,
-    schema: require("./gmail").Schema
+    SyncManager: require("./gmail").SyncManager,
+    Schema: require("./gmail").Schema
 }

@@ -11,8 +11,8 @@ const connectorConfig: duckduckapi = {
     -- This SQL will be run on startup every time.
     -- CREATE TABLE SAAS_TABLE_NAME (.....);
 
-  ` + GoogleCalendar.schema 
-    + GMail.schema,
+  ` + GoogleCalendar.Schema 
+    + GMail.Schema,
   functionsFilePath: path.resolve(__dirname, "./functions.ts"),
 };
  

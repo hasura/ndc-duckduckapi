@@ -1,5 +1,6 @@
 import { NotSupported, ObjectType } from "@hasura/ndc-sdk-typescript";
 import * as duckdb from "duckdb";
+import { AsyncConnection, DuckDBManager} from "./duckdb-connection-manager";
 import * as fs from "fs";
 import { promisify } from "util";
 import { DuckDBConfigurationSchema } from "./duckduckapi";
@@ -74,31 +75,18 @@ const determineType = (t: string): string => {
   }
 };
 
-async function queryAll(con: any, query: any): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    con.all(query, function (err: any, res: any) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(res);
-      }
-    });
-  });
-}
-
 export async function generateConfig(
-  db: duckdb.Database,
+  db: DuckDBManager,
 ): Promise<DuckDBConfigurationSchema> {
-  const connection = db.connect();
   const tableNames: string[] = [];
   const tableAliases: { [k: string]: string } = {};
   const objectTypes: { [k: string]: ObjectType } = {};
   
   // Get all tables with their comments
-  const tables = await queryAll(connection, "SHOW ALL TABLES");
+  const tables = await db.query( "SHOW ALL TABLES");
   
   // Get table comments
-  const tableComments = await queryAll(connection, `
+  const tableComments = await db.query( `
     SELECT table_name, comment 
     FROM duckdb_tables() 
     WHERE schema_name = 'main'
@@ -110,7 +98,7 @@ export async function generateConfig(
   );
 
   // Get all column comments upfront
-  const columnComments = await queryAll(connection, `
+  const columnComments = await db.query( `
     SELECT table_name, column_name, comment 
     FROM duckdb_columns() 
     WHERE schema_name = 'main'

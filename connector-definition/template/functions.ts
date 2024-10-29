@@ -1,7 +1,7 @@
 import { JSONValue } from "@hasura/ndc-lambda-sdk";
 import { GMail, GoogleCalendar } from "@hasura/ndc-duckduckapi/services";
 import { getOAuthCredentialsFromHeader } from "@hasura/ndc-duckduckapi";
-
+import { db, AsyncConnection} from "@hasura/ndc-duckduckapi";
 
 /***********************************************************************************/
 /************************** BUILT-IN EXAMPLES **************************************/
@@ -11,17 +11,19 @@ import { getOAuthCredentialsFromHeader } from "@hasura/ndc-duckduckapi";
 const calendarLoaderState = {
   state: 'Stopped'
 };
+let syncManager;
 
-// (async () => {
-  // try {
-    // console.log("Trying to initialize calendar loader in case credentials are already available");
-    // const calendarSyncManager = await GoogleCalendar.syncManager.create(calendarLoaderState, 1);
-    // await calendarSyncManager.initialize();
-  // } catch (error) {
-    // calendarLoaderState.state = `Stopped`;
-    // console.error(error);
-  // }
-// })();
+(async () => {
+
+  try {
+    console.log("Trying to initialize calendar loader in case credentials are already available");
+    const calendarSyncManager = await GoogleCalendar.SyncManager.create(calendarLoaderState, 1);
+    await calendarSyncManager.initialize();
+  } catch (error) {
+    calendarLoaderState.state = `Stopped`;
+    console.error(error);
+  }
+})();
 
 /**
  * $ddn.jobs.calendar-loader.init
@@ -41,14 +43,13 @@ export async function __dda_calendar_loader_init(headers: JSONValue): Promise<st
     return calendarLoaderState.state;
   }
 
-  const syncManager = await GoogleCalendar.syncManager.create (
+  syncManager = await GoogleCalendar.SyncManager.create (
     calendarLoaderState,
     1, // sync every minute
     credentials['google-calendar']
   );
 
   return await syncManager.initialize();
-
 }
 /**
  *  $ddn.jobs.calendar-loader.status
@@ -59,9 +60,38 @@ export function __dda_calendar_loader_status(): string {
   return calendarLoaderState.state;
 }
 
+/**
+ * This is a function to create an event on your google calendar
+ */
+export async function createCalendarEvent(headers: JSONValue, 
+  summary: string,
+  startDateTime: Date,
+  endDateTime: Date,
+  description?: string,
+  attendees?: string[],
+  timeZone?: string,
+  location?: string): Promise<{success: boolean, message: string}> {
+
+  let credentials;
+  credentials = getOAuthCredentialsFromHeader(headers);
+
+  if (!credentials || !credentials['google-calendar'] || !credentials['google-calendar'].access_token) {
+    console.log(credentials);
+    return {success: false, message: `Error in getting the google-calendar oauth credentials. Login to google-calendar?`};
+  }
+
+  const event = await GoogleCalendar.CreateCalendarEvent(credentials['google-calendar'], summary, description, startDateTime, endDateTime, attendees, timeZone, location);
+
+  if (event.status === 'error') {
+    return {success: false, message: `Error creating event: ${event.error}`};
+  } else {
+    return {success: true, message: `Event created successfully: ${event}`};
+  }
+}
+
 /***********************************************************************************************
  * GMAIL LOADER
- */
+ ***********************************************************************************************/
 /* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
 const gmailLoaderState = {
   state: 'Stopped'
@@ -70,7 +100,7 @@ const gmailLoaderState = {
 (async () => {
   try {
     console.log("Trying to initialize gmail loader in case credentials are already available");
-    const gmailSyncManager = await GMail.syncManager.create(gmailLoaderState, 1);
+    const gmailSyncManager = await GMail.SyncManager.create(gmailLoaderState, 1);
     await gmailSyncManager.initialize();
   } catch (error) {
     gmailLoaderState.state = `Stopped`;
@@ -96,15 +126,15 @@ export async function __dda_gmail_loader_init(headers: JSONValue): Promise<strin
     return gmailLoaderState.state;
   }
 
-  const syncManager = await GMail.syncManager.create (
+  const syncManager = await GMail.SyncManager.create (
     gmailLoaderState,
     1, // sync every minute
     credentials['google-gmail']
   );
 
   return await syncManager.initialize();
-
 }
+
 /**
  *  $ddn.jobs.gmail-loader.status
  *
@@ -113,7 +143,6 @@ export async function __dda_gmail_loader_init(headers: JSONValue): Promise<strin
 export function __dda_gmail_loader_status(): string {
   return gmailLoaderState.state;
 }
-
 
 /**********************************************************************************************/
 /***************************  Add your own loader  ********************************************/

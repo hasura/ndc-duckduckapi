@@ -23,9 +23,35 @@ import { do_explain } from "./handlers/explain";
 import { perform_query, plan_queries } from "./handlers/query";
 import * as duckdb from "duckdb";
 import { generateConfig } from "./generate-config";
+import { DuckDBManager } from "./duckdb-connection-manager";
 
+// Make a connection manager
 const DUCKDB_URL = "duck.db"; // process.env["DUCKDB_URL"] as string || "duck.db";
-export const db = new duckdb.Database(DUCKDB_URL);
+export const db = new DuckDBManager(DUCKDB_URL);
+
+// // Example usage:
+// const connectionManager = new DuckDBConnectionManager('mydb.db', 3);
+// 
+// // Async usage
+// async function example() {
+//   // Each operation gets its own connection
+//   const result1 = await connectionManager.withConnection(async (conn) => {
+//     return await conn.all('SELECT * FROM mytable');
+//   });
+// 
+//   const result2 = await connectionManager.withConnection(async (conn) => {
+//     return await conn.run('INSERT INTO mytable VALUES (?)');
+//   });
+// }
+// 
+// // Sync usage
+// function exampleSync() {
+//   const result = connectionManager.withConnectionSync((conn) => {
+//     return conn.prepare('SELECT * FROM mytable').all();
+//   });
+// }
+
+
 
 export type DuckDBConfigurationSchema = {
   collection_names: string[];
@@ -44,21 +70,17 @@ export type Configuration = lambdaSdk.Configuration & {
 };
 
 export type State = lambdaSdk.State & {
-  client: duckdb.Database;
+  client: DuckDBManager;
 };
 
 async function createDuckDBFile(schema: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    db.run(schema, (err) => {
-      if (err) {
-        console.error("Error creating schema:", err);
-        reject(err);
-      } else {
-        console.log("Schema created successfully");
-        resolve();
-      }
-    });
-  });
+    try {
+      await db.query(schema);
+      console.log("Schema created successfully");
+    } catch (err) {
+      console.error("Error creating schema:", err);
+      throw(err);
+  }
 }
 
 export interface duckduckapi {

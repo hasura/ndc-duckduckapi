@@ -1,32 +1,13 @@
 import { google, gmail_v1 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
+import { AsyncConnection } from "../duckdb-connection-manager";
 import { db } from "../duckduckapi";
-import { GaxiosResponse } from "gaxios";
 
 // Debug logging helper
 function debugLog(...args: any[]) {
   if (process.env.DEBUG) {
     console.log(...args);
   }
-}
-
-// Database helpers
-function asyncDBAll(sql: string, ...args: any[]) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, ...args, (error, result) => {
-      if (error) {debugLog(sql, args, error); reject(error);}
-      else { debugLog(sql, args, result); resolve(result); }
-    });
-  });
-}
-
-function asyncDBRun(sql: string, ...args: any[]) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, ...args, (error, result) => {
-      if (error) {debugLog(sql, args, error); reject(error);}
-      else { debugLog(sql, args, result); resolve(result); }
-    });
-  });
 }
 
 export const Schema = `
@@ -42,15 +23,15 @@ CREATE TABLE IF NOT EXISTS gmail_messages (
   message_id VARCHAR,
   subject VARCHAR,
   from_address VARCHAR,
-  to_addresses JSON,
-  cc_addresses JSON,
-  bcc_addresses JSON,
-  date VARCHAR,
+  to_addresses TEXT,
+  cc_addresses TEXT,
+  bcc_addresses TEXT,
+  date TIMESTAMP WITH TIME ZONE,
   body_plain TEXT,
   body_html TEXT,
   attachment_count INTEGER,
-  attachments JSON,
-  headers JSON,
+  attachments TEXT,
+  headers TEXT,
   sync_status VARCHAR,
   last_synced TIMESTAMP WITH TIME ZONE,
   is_draft BOOLEAN,
@@ -145,7 +126,7 @@ export class SyncManager {
   ): Promise<SyncManager> {
     let loadedCredentials;
     if (!credentials) {
-      const result: any = await asyncDBAll("SELECT client FROM gmail_oauth2_client");
+      const result: any = await db.query("SELECT client FROM gmail_oauth2_client");
       if (!result || result.length === 0) {
         throw new Error("No credentials provided or found in the database");
       }
@@ -153,8 +134,10 @@ export class SyncManager {
     } else {
       loadedCredentials = credentials;
       if (loadedCredentials.refresh_token && loadedCredentials.expires_in && loadedCredentials.client_id && loadedCredentials.client_secret) {
-        await asyncDBRun('DELETE FROM gmail_oauth2_client;');
-        await asyncDBRun('INSERT OR REPLACE INTO gmail_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+        await db.transaction(async (conn) => {
+          await conn.run('DELETE FROM gmail_oauth2_client;');
+          await conn.run('INSERT OR REPLACE INTO gmail_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+        });
       }
     }
 
@@ -175,8 +158,10 @@ export class SyncManager {
       client_secret: this.credentials.client_secret,
     }
     if (credentials.refresh_token && credentials.expires_in && credentials.client_id && credentials.client_secret) {
-      await asyncDBRun('DELETE FROM gmail_oauth2_client;');
-      await asyncDBRun('INSERT OR REPLACE INTO gmail_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+      await db.transaction(async (conn) => {
+        await conn.run('DELETE FROM gmail_oauth2_client;');
+        await conn.run('INSERT OR REPLACE INTO gmail_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+      });
     }
   }
 
@@ -283,18 +268,17 @@ export class SyncManager {
 
         try {
           // Begin transaction to save messages and update sync state
-          await asyncDBRun("BEGIN TRANSACTION");
-          if (history.data.history) {
-            await this.processHistoryChanges(history.data.history, userId);
-          }
+          await db.transaction(async (conn) => {
+            if (history.data.history) {
+              await this.processHistoryChanges(history.data.history, userId, conn);
+            }
 
-          // Update sync state with latest history ID
-          if (history.data.historyId) {
-            await this.updateSyncState(userId, history.data.historyId);
-          }
-          await asyncDBRun("COMMIT");
+            // Update sync state with latest history ID
+            if (history.data.historyId) {
+              await this.updateSyncState(userId, history.data.historyId, conn);
+            }
+          });
         } catch (error) {
-          await asyncDBRun("ROLLBACK");
           throw error;
         }
 
@@ -319,7 +303,8 @@ export class SyncManager {
 
   private async processHistoryChanges(
     history: gmail_v1.Schema$History[],
-    userId: string
+    userId: string,
+    conn: AsyncConnection
   ): Promise<void> {
     try {
       for (const record of history) {
@@ -332,7 +317,7 @@ export class SyncManager {
                 id: messageAdded.message.id!,
                 format: 'full',
               });
-              await this.processMessage(fullMessage.data, userId);
+              await this.processMessage(fullMessage.data, userId, conn);
             }
           }
         }
@@ -341,7 +326,7 @@ export class SyncManager {
         if (record.messagesDeleted) {
           for (const messageDeleted of record.messagesDeleted) {
             if (messageDeleted.message?.id) {
-              await asyncDBAll(
+              await conn.run(
                 "UPDATE gmail_messages SET sync_status = 'deleted', last_synced = CURRENT_TIMESTAMP WHERE id = ?",
                 messageDeleted.message.id
               );
@@ -358,7 +343,7 @@ export class SyncManager {
               id: messageId,
               format: 'full',
             });
-            await this.processMessage(fullMessage.data, userId);
+            await this.processMessage(fullMessage.data, userId, conn);
           }
         }
       }
@@ -369,10 +354,11 @@ export class SyncManager {
 
   private async processMessage(
     message: gmail_v1.Schema$Message,
-    userId: string
+    userId: string,
+    conn: AsyncConnection
   ): Promise<void> {
     const formattedMessage = await this.formatMessageData(message, userId);
-    await this.insertMessageBatch([formattedMessage]);
+    await this.insertMessageBatch([formattedMessage], conn);
   }
 
   private async formatMessageData(
@@ -486,7 +472,7 @@ last_synced: new Date().toISOString(),
     return { plainText, htmlContent };
   }
 
-  private async insertMessageBatch(messages: GmailMessage[]): Promise<void> {
+  private async insertMessageBatch(messages: GmailMessage[], conn: AsyncConnection): Promise<void> {
     if (messages.length === 0) return;
 
     for (const message of messages) {
@@ -555,7 +541,7 @@ last_synced: new Date().toISOString(),
           message.is_starred
         ];
 
-        const result: any = await asyncDBAll(stmt, ...values);
+        const result: any = await conn.all(stmt, ...values);
         console.log('GmailLoader:: ' + "Message inserted/updated: " + message.id);
       } catch (error) {
         debugLog(error);
@@ -570,13 +556,15 @@ last_synced: new Date().toISOString(),
     debugLog(`Starting full sync for user: ${userId}`);
     try {
 
-      // Clear existing messages for this user
-      await asyncDBAll("DELETE FROM gmail_messages");
-      console.log('GmailLoader:: ' + "Cleared existing messages for full sync");
+      await db.transaction(async (conn) => {
+        // Clear existing messages for this user
+        await conn.run("DELETE FROM gmail_messages");
+        console.log('GmailLoader:: ' + "Cleared existing messages for full sync");
 
-      // Clear sync state
-      await asyncDBAll("DELETE FROM gmail_sync_state WHERE user_id = ?", userId);
-      console.log('GmailLoader:: ' + "Cleared sync state for full sync");
+        // Clear sync state
+        await conn.run("DELETE FROM gmail_sync_state WHERE user_id = ?", userId);
+        console.log('GmailLoader:: ' + "Cleared sync state for full sync");
+      });
 
       let pageToken: string | undefined;
       do {
@@ -593,7 +581,9 @@ last_synced: new Date().toISOString(),
               id: messageInfo.id!,
               format: 'full',
             });
-            await this.processMessage(fullMessage.data, userId);
+            await db.transaction(async (conn) => {
+              await this.processMessage(fullMessage.data, userId, conn);
+            });
           }
         }
 
@@ -603,7 +593,10 @@ last_synced: new Date().toISOString(),
       // Update sync state with latest history ID
       const profile = await this.gmail.users.getProfile({ userId });
       if (profile.data.historyId) {
-        await this.updateSyncState(userId, profile.data.historyId);
+        const historyId = profile.data.historyId;
+        await db.transaction(async (conn) => {
+          await this.updateSyncState(userId, historyId, conn);
+        });
       }
 
       console.log('GmailLoader:: ' + "Full sync completed successfully");
@@ -614,7 +607,7 @@ last_synced: new Date().toISOString(),
   }
 
   private async getSyncState(userId: string): Promise<SyncState | null> {
-    const result: any = await asyncDBAll(
+    const result: any = await db.query(
       "SELECT history_id, last_sync FROM gmail_sync_state WHERE user_id = ?",
       userId
     );
@@ -631,9 +624,10 @@ last_synced: new Date().toISOString(),
   private async updateSyncState(
     userId: string,
     historyId: string,
+    conn: AsyncConnection
   ): Promise<void> {
     try {
-      await asyncDBAll(
+      await conn.run(
         `INSERT OR REPLACE INTO gmail_sync_state (user_id, history_id, last_sync)
          VALUES (?, ?, CURRENT_TIMESTAMP)`,
         userId,
