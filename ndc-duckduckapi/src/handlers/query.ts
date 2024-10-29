@@ -573,6 +573,7 @@ export async function perform_query(
         row_set.rows = regular_results.rows;
       }
       response.push(row_set);
+      await state.client.releaseSyncConnection();
     } catch (err) {
       console.error('Error performing query: ' + err);
       throw err;
