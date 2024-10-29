@@ -496,9 +496,14 @@ export async function perform_query(
   // const con = state.client.connect();
   const response: RowSet[] = [];
   for (let query_plan of query_plans) {
-    const res = await state.client.query(query_plan.sql);
-    const row_set = JSON.parse(res[0]["data"] as string) as RowSet;
-    response.push(row_set);
+    try {
+      const connection = await state.client.getSyncConnection();
+      const res = await do_all(connection, query_plan);
+      const row_set = JSON.parse(res[0]["data"] as string) as RowSet;
+      response.push(row_set);
+    } catch (err) {
+      console.error('RAAAAAAAAAAAAAAAAAAAAAAR.perform_query:: ' + "Error performing query: " + err);
+    }
   }
   return response;
 }

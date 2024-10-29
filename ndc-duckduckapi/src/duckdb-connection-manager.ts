@@ -39,7 +39,18 @@ export class DuckDBManager {
       this.activeConnections = 0;
     }
   
-    async getConnection(): Promise<AsyncConnection> {
+    async getSyncConnection(): Promise<duckdb.Connection> {
+      if (this.activeConnections >= this.maxConnections) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return this.getSyncConnection();
+      }
+
+      const connection = await this.db.connect();
+      this.activeConnections++;
+      return connection;
+    }
+
+     async getConnection(): Promise<AsyncConnection> {
       if (this.activeConnections >= this.maxConnections) {
         await new Promise(resolve => setTimeout(resolve, 100));
         return this.getConnection();
