@@ -1,7 +1,7 @@
 import { JSONValue } from "@hasura/ndc-lambda-sdk";
 import { GMail, GoogleCalendar } from "@hasura/ndc-duckduckapi/services";
 import { getOAuthCredentialsFromHeader } from "@hasura/ndc-duckduckapi";
-import { db, AsyncConnection} from "@hasura/ndc-duckduckapi";
+import { getDB } from "@hasura/ndc-duckduckapi";
 
 /***********************************************************************************/
 /************************** BUILT-IN EXAMPLES **************************************/
@@ -9,15 +9,19 @@ import { db, AsyncConnection} from "@hasura/ndc-duckduckapi";
 
 /* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
 const calendarLoaderState = {
-  state: 'Stopped'
+  state: "Stopped",
 };
 let syncManager;
 
 (async () => {
-
   try {
-    console.log("Trying to initialize calendar loader in case credentials are already available");
-    const calendarSyncManager = await GoogleCalendar.SyncManager.create(calendarLoaderState, 1);
+    console.log(
+      "Trying to initialize calendar loader in case credentials are already available"
+    );
+    const calendarSyncManager = await GoogleCalendar.SyncManager.create(
+      calendarLoaderState,
+      1
+    );
     await calendarSyncManager.initialize();
   } catch (error) {
     calendarLoaderState.state = `Stopped`;
@@ -28,8 +32,9 @@ let syncManager;
 /**
  * $ddn.jobs.calendar-loader.init
  */
-export async function __dda_calendar_loader_init(headers: JSONValue): Promise<string> {
-
+export async function __dda_calendar_loader_init(
+  headers: JSONValue
+): Promise<string> {
   if (calendarLoaderState.state == "Running") {
     return calendarLoaderState.state;
   }
@@ -37,16 +42,20 @@ export async function __dda_calendar_loader_init(headers: JSONValue): Promise<st
   let credentials;
   credentials = getOAuthCredentialsFromHeader(headers);
 
-  if (!credentials || !credentials['google-calendar'] || !credentials['google-calendar'].access_token) {
+  if (
+    !credentials ||
+    !credentials["google-calendar"] ||
+    !credentials["google-calendar"].access_token
+  ) {
     console.log(credentials);
     calendarLoaderState.state = `Error in getting the google-calendar oauth credentials. Login to google-calendar?`;
     return calendarLoaderState.state;
   }
 
-  syncManager = await GoogleCalendar.SyncManager.create (
+  syncManager = await GoogleCalendar.SyncManager.create(
     calendarLoaderState,
     1, // sync every minute
-    credentials['google-calendar']
+    credentials["google-calendar"]
   );
 
   return await syncManager.initialize();
@@ -63,29 +72,46 @@ export function __dda_calendar_loader_status(): string {
 /**
  * This is a function to create an event on your google calendar
  */
-export async function createCalendarEvent(headers: JSONValue, 
+export async function createCalendarEvent(
+  headers: JSONValue,
   summary: string,
   startDateTime: Date,
   endDateTime: Date,
   description?: string,
   attendees?: string[],
   timeZone?: string,
-  location?: string): Promise<{success: boolean, message: string}> {
-
+  location?: string
+): Promise<{ success: boolean; message: string }> {
   let credentials;
   credentials = getOAuthCredentialsFromHeader(headers);
 
-  if (!credentials || !credentials['google-calendar'] || !credentials['google-calendar'].access_token) {
+  if (
+    !credentials ||
+    !credentials["google-calendar"] ||
+    !credentials["google-calendar"].access_token
+  ) {
     console.log(credentials);
-    return {success: false, message: `Error in getting the google-calendar oauth credentials. Login to google-calendar?`};
+    return {
+      success: false,
+      message: `Error in getting the google-calendar oauth credentials. Login to google-calendar?`,
+    };
   }
 
-  const event = await GoogleCalendar.CreateCalendarEvent(credentials['google-calendar'], summary, description, startDateTime, endDateTime, attendees, timeZone, location);
+  const event = await GoogleCalendar.CreateCalendarEvent(
+    credentials["google-calendar"],
+    summary,
+    description,
+    startDateTime,
+    endDateTime,
+    attendees,
+    timeZone,
+    location
+  );
 
-  if (event.status === 'error') {
-    return {success: false, message: `Error creating event: ${event.error}`};
+  if (event.status === "error") {
+    return { success: false, message: `Error creating event: ${event.error}` };
   } else {
-    return {success: true, message: `Event created successfully: ${event}`};
+    return { success: true, message: `Event created successfully: ${event}` };
   }
 }
 
@@ -94,13 +120,18 @@ export async function createCalendarEvent(headers: JSONValue,
  ***********************************************************************************************/
 /* To add more built in examples, check out other services at @hasura/ndc-duckduckapi/services */
 const gmailLoaderState = {
-  state: 'Stopped'
+  state: "Stopped",
 };
 
 (async () => {
   try {
-    console.log("Trying to initialize gmail loader in case credentials are already available");
-    const gmailSyncManager = await GMail.SyncManager.create(gmailLoaderState, 1);
+    console.log(
+      "Trying to initialize gmail loader in case credentials are already available"
+    );
+    const gmailSyncManager = await GMail.SyncManager.create(
+      gmailLoaderState,
+      1
+    );
     await gmailSyncManager.initialize();
   } catch (error) {
     gmailLoaderState.state = `Stopped`;
@@ -111,8 +142,9 @@ const gmailLoaderState = {
 /**
  * $ddn.jobs.gmail-loader.init
  */
-export async function __dda_gmail_loader_init(headers: JSONValue): Promise<string> {
-
+export async function __dda_gmail_loader_init(
+  headers: JSONValue
+): Promise<string> {
   if (gmailLoaderState.state == "Running") {
     return gmailLoaderState.state;
   }
@@ -120,16 +152,20 @@ export async function __dda_gmail_loader_init(headers: JSONValue): Promise<strin
   let credentials;
   credentials = getOAuthCredentialsFromHeader(headers);
 
-  if (!credentials || !credentials['google-gmail'] || !credentials['google-gmail'].access_token) {
+  if (
+    !credentials ||
+    !credentials["google-gmail"] ||
+    !credentials["google-gmail"].access_token
+  ) {
     console.log(credentials);
     gmailLoaderState.state = `Error in getting the GMail oauth credentials. Login to google-gmail?`;
     return gmailLoaderState.state;
   }
 
-  const syncManager = await GMail.SyncManager.create (
+  const syncManager = await GMail.SyncManager.create(
     gmailLoaderState,
     1, // sync every minute
-    credentials['google-gmail']
+    credentials["google-gmail"]
   );
 
   return await syncManager.initialize();
@@ -149,8 +185,8 @@ export function __dda_gmail_loader_status(): string {
 /**********************************************************************************************/
 
 const myLoaderState = {
-  state: 'This is an unimplemented loader. Edit it in functions.ts.'
-}
+  state: "This is an unimplemented loader. Edit it in functions.ts.",
+};
 
 /**
  * This is the loader function which will start loading data into duckdb.
@@ -158,8 +194,9 @@ const myLoaderState = {
  *  // Replace my-loader to create your own unique name, eg: my-saas-loader, and to group it with the right job status method.
  * $ddn.jobs.my-loader.init
  */
-export async function __dda_my_loader_init(headers: JSONValue): Promise<string> {
-
+export async function __dda_my_loader_init(
+  headers: JSONValue
+): Promise<string> {
   // If the loader is already running
   if (myLoaderState.state === "running") {
     return myLoaderState.state;
@@ -171,7 +208,11 @@ export async function __dda_my_loader_init(headers: JSONValue): Promise<string> 
   console.log(credentials);
 
   // If the credentials are not found, return an error and update the status so that the user can login
-  if (!credentials || !credentials['my-service'] || !credentials['my-service'].access_token) {
+  if (
+    !credentials ||
+    !credentials["my-service"] ||
+    !credentials["my-service"].access_token
+  ) {
     myLoaderState.state = `Error in getting the my-service oauth credentials. Login to my-service?`;
     return myLoaderState.state;
   }
@@ -199,7 +240,6 @@ export function __dda_my_loader_status(): string {
   return myLoaderState.state;
 }
 
-
 /*******************************************************************************************/
 /* Some other examples of custom actions you want to provide or APIs you want to wrap over */
 /*******************************************************************************************/
@@ -207,7 +247,7 @@ export function __dda_my_loader_status(): string {
 /** @readonly */
 export function testCalendar(headers: JSONValue): JSONValue {
   return new JSONValue({
-    success: true
+    success: true,
   });
 }
 

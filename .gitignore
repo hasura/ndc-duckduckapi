@@ -13,3 +13,6 @@ ndc-duckduckapi/dist
 
 connector-definition/dist
 connector-definition/template/package-lock.json
+
+ndc-duckduckapi/test.db
+ndc-duckduckapi/test.db.wal

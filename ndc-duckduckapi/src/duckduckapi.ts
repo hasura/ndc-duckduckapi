@@ -21,37 +21,62 @@ import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
 import { do_get_schema } from "./handlers/schema";
 import { do_explain } from "./handlers/explain";
 import { perform_query, plan_queries } from "./handlers/query";
-import * as duckdb from "duckdb";
 import { generateConfig } from "./generate-config";
-import { DuckDBManager } from "./duckdb-connection-manager";
+import { Connection, Database } from "duckdb-async";
 
 // Make a connection manager
 const DUCKDB_URL = "duck.db"; // process.env["DUCKDB_URL"] as string || "duck.db";
-export const db = new DuckDBManager(DUCKDB_URL);
+let db: Database;
+export async function getDB() {
+  if (!db) {
+    db = await Database.create(DUCKDB_URL);
+  }
+  return db;
+}
+
+export async function transaction(
+  db: Database,
+  fn: (conn: Connection) => Promise<void>
+) {
+  const conn = await db.connect();
+  await conn.run("begin");
+  try {
+    await fn(conn);
+    await conn.run("commit");
+  } catch (e) {
+    await conn.run("rollback");
+    throw e;
+  } finally {
+    await conn.close();
+  }
+}
+
+process.on("SIGINT", async () => {
+  await db?.close();
+  process.exit(0);
+});
 
 // // Example usage:
 // const connectionManager = new DuckDBConnectionManager('mydb.db', 3);
-// 
+//
 // // Async usage
 // async function example() {
 //   // Each operation gets its own connection
 //   const result1 = await connectionManager.withConnection(async (conn) => {
 //     return await conn.all('SELECT * FROM mytable');
 //   });
-// 
+//
 //   const result2 = await connectionManager.withConnection(async (conn) => {
 //     return await conn.run('INSERT INTO mytable VALUES (?)');
 //   });
 // }
-// 
+//
 // // Sync usage
 // function exampleSync() {
 //   const result = connectionManager.withConnectionSync((conn) => {
 //     return conn.prepare('SELECT * FROM mytable').all();
 //   });
 // }
-
-
 
 export type DuckDBConfigurationSchema = {
   collection_names: string[];
@@ -70,16 +95,17 @@ export type Configuration = lambdaSdk.Configuration & {
 };
 
 export type State = lambdaSdk.State & {
-  client: DuckDBManager;
+  client: Database;
 };
 
 async function createDuckDBFile(schema: string): Promise<void> {
-    try {
-      await db.query(schema);
-      console.log("Schema created successfully");
-    } catch (err) {
-      console.error("Error creating schema:", err);
-      throw(err);
+  try {
+    const db = await getDB();
+    await db.run(schema);
+    console.log("Schema created successfully");
+  } catch (err) {
+    console.error("Error creating schema:", err);
+    throw err;
   }
 }
 
@@ -89,8 +115,10 @@ export interface duckduckapi {
 }
 
 export async function makeConnector(
-  dda: duckduckapi,
+  dda: duckduckapi
 ): Promise<Connector<Configuration, State>> {
+  db = await Database.create(DUCKDB_URL);
+
   const lambdaSdkConnector = lambdaSdk.createConnector({
     functionsFilePath: dda.functionsFilePath,
   });
@@ -108,15 +136,16 @@ export async function makeConnector(
      */
 
     parseConfiguration: async function (
-      configurationDir: string,
+      configurationDir: string
     ): Promise<Configuration> {
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
 
       console.log("#####", dda.functionsFilePath);
 
-      const config =
-        await lambdaSdkConnector.parseConfiguration(configurationDir);
+      const config = await lambdaSdkConnector.parseConfiguration(
+        configurationDir
+      );
 
       return {
         ...config,
@@ -137,11 +166,11 @@ export async function makeConnector(
      */
     async tryInitState(
       configuration: Configuration,
-      metrics: Registry,
+      metrics: Registry
     ): Promise<State> {
       const state = await lambdaSdkConnector.tryInitState(
         configuration,
-        metrics,
+        metrics
       );
       return Promise.resolve({ ...state, client: db });
     },
@@ -165,7 +194,7 @@ export async function makeConnector(
      * @param configuration
      */
     getSchema: async function (
-      configuration: Configuration,
+      configuration: Configuration
     ): Promise<SchemaResponse> {
       const schema = await lambdaSdkConnector.getSchema(configuration);
       return do_get_schema(configuration.duckdbConfig, schema);
@@ -183,7 +212,7 @@ export async function makeConnector(
     queryExplain(
       configuration: Configuration,
       _: State,
-      request: QueryRequest,
+      request: QueryRequest
     ): Promise<ExplainResponse> {
       return do_explain(configuration, request);
     },
@@ -197,7 +226,7 @@ export async function makeConnector(
     mutationExplain(
       configuration: Configuration,
       _: State,
-      request: MutationRequest,
+      request: MutationRequest
     ): Promise<ExplainResponse> {
       throw new Forbidden("Not implemented", {});
     },
@@ -214,7 +243,7 @@ export async function makeConnector(
     async query(
       configuration: Configuration,
       state: State,
-      request: QueryRequest,
+      request: QueryRequest
     ): Promise<QueryResponse> {
       if (configuration.functionsSchema.functions[request.collection]) {
         return lambdaSdkConnector.query(configuration, state, request);
@@ -236,7 +265,7 @@ export async function makeConnector(
     mutation(
       configuration: Configuration,
       state: State,
-      request: MutationRequest,
+      request: MutationRequest
     ): Promise<MutationResponse> {
       return lambdaSdkConnector.mutation(configuration, state, request);
     },
@@ -273,7 +302,7 @@ export async function makeConnector(
   return Promise.resolve(connector);
 }
 
-export function getOAuthCredentialsFromHeader (
+export function getOAuthCredentialsFromHeader(
   headers: JSONValue
 ): Record<string, any> {
   const oauthServices = headers.value as any;
@@ -281,7 +310,7 @@ export function getOAuthCredentialsFromHeader (
   try {
     const decodedServices = Buffer.from(
       oauthServices["x-hasura-oauth-services"] as string,
-      "base64",
+      "base64"
     ).toString("utf-8");
     const serviceTokens = JSON.parse(decodedServices);
     return serviceTokens;

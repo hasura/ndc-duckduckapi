@@ -1,7 +1,7 @@
 import { google, calendar_v3 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
-import { AsyncConnection } from "../duckdb-connection-manager";
-import { db } from "../duckduckapi";
+import { Connection } from "duckdb-async";
+import { getDB, transaction } from "../duckduckapi";
 import { GaxiosResponse } from "gaxios";
 
 // Add this function at the beginning of the file
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS calendar_oauth2_client(
   client TEXT PRIMARY KEY
 );
 
-`
+`;
 
 interface CalendarEvent {
   id: string;
@@ -121,7 +121,7 @@ export class SyncManager {
     client_secret?: string;
   };
 
-  private constructor() {};
+  private constructor() {}
 
   static async create(
     loaderState: LoaderState,
@@ -132,22 +132,32 @@ export class SyncManager {
       expires_in: number;
       client_id: string;
       client_secret: string;
-    },
+    }
   ): Promise<SyncManager> {
-
+    const db = await getDB();
     let loadedCredentials;
     if (!credentials) {
-      const result: any = await db.query("SELECT client FROM calendar_oauth2_client");
+      const result: any = await db.all(
+        "SELECT client FROM calendar_oauth2_client"
+      );
       if (!result || result.length === 0) {
         throw new Error("No credentials provided or found in the database");
       }
       loadedCredentials = JSON.parse(result[0].client);
     } else {
       loadedCredentials = credentials;
-      if (loadedCredentials.refresh_token && loadedCredentials.expires_in && loadedCredentials.client_id && loadedCredentials.client_secret) {
-        await db.transaction(async (conn) => {
-          await conn.run('DELETE FROM calendar_oauth2_client;');
-          await conn.run('INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
+      if (
+        loadedCredentials.refresh_token &&
+        loadedCredentials.expires_in &&
+        loadedCredentials.client_id &&
+        loadedCredentials.client_secret
+      ) {
+        await transaction(db, async (conn) => {
+          await conn.run("DELETE FROM calendar_oauth2_client;");
+          await conn.run(
+            "INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?);",
+            JSON.stringify(credentials)
+          );
         });
       }
     }
@@ -160,28 +170,49 @@ export class SyncManager {
     return instance;
   }
 
-  private async saveCredentials({access_token, refresh_token, expires_in}: {access_token: string | null | undefined, refresh_token: string | null | undefined, expires_in: number | null | undefined}): Promise<void> {
-      const credentials = {
-        access_token,
-        refresh_token,
-        expires_in,
-        client_id: this.credentials.client_id,
-        client_secret: this.credentials.client_secret,
-      }
-      if (credentials.refresh_token && credentials.expires_in && credentials.client_id && credentials.client_secret) {
-        await db.transaction(async (conn) => {
-          await conn.run('DELETE FROM calendar_oauth2_client;');
-          await conn.run('INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?);', JSON.stringify(credentials));
-        });
-      }
+  private async saveCredentials({
+    access_token,
+    refresh_token,
+    expires_in,
+  }: {
+    access_token: string | null | undefined;
+    refresh_token: string | null | undefined;
+    expires_in: number | null | undefined;
+  }): Promise<void> {
+    const credentials = {
+      access_token,
+      refresh_token,
+      expires_in,
+      client_id: this.credentials.client_id,
+      client_secret: this.credentials.client_secret,
+    };
+    if (
+      credentials.refresh_token &&
+      credentials.expires_in &&
+      credentials.client_id &&
+      credentials.client_secret
+    ) {
+      await transaction(await getDB(), async (conn) => {
+        await conn.run("DELETE FROM calendar_oauth2_client;");
+        await conn.run(
+          "INSERT OR REPLACE INTO calendar_oauth2_client (client) VALUES (?);",
+          JSON.stringify(credentials)
+        );
+      });
+    }
   }
 
   private async initializeAuth(): Promise<void> {
-    if (this.credentials?.client_id && this.credentials?.client_secret && this.credentials?.refresh_token && this.credentials?.expires_in) {
+    if (
+      this.credentials?.client_id &&
+      this.credentials?.client_secret &&
+      this.credentials?.refresh_token &&
+      this.credentials?.expires_in
+    ) {
       this.auth = new OAuth2Client({
         clientId: this.credentials.client_id,
         clientSecret: this.credentials.client_secret,
-        eagerRefreshThresholdMillis: 1000 // 60 seconds 
+        eagerRefreshThresholdMillis: 1000, // 60 seconds
       });
     } else {
       this.auth = new OAuth2Client();
@@ -190,19 +221,21 @@ export class SyncManager {
     this.auth.setCredentials({
       access_token: this.credentials.access_token,
       refresh_token: this.credentials.refresh_token,
-      expiry_date:  Date.now() + 3000 
+      expiry_date: Date.now() + 3000,
       // expiry_date: this.credentials.expires_in ? Date.now() + this.credentials.expires_in * 1000 : undefined
     });
 
     this.calendar = google.calendar({ version: "v3", auth: this.auth });
-  
-    this.auth.on('tokens', (tokens) => {
+
+    this.auth.on("tokens", (tokens) => {
       this.saveCredentials({
-        access_token: tokens?.access_token, 
-        refresh_token: this.credentials.refresh_token, 
-        expires_in: tokens?.expiry_date ? ((tokens.expiry_date - Date.now()) / 1000) : undefined
+        access_token: tokens?.access_token,
+        refresh_token: this.credentials.refresh_token,
+        expires_in: tokens?.expiry_date
+          ? (tokens.expiry_date - Date.now()) / 1000
+          : undefined,
       });
-      console.log('GoogleCalendarLoader.Auth:: ' + 'Refreshed token saved.');
+      console.log("GoogleCalendarLoader.Auth:: " + "Refreshed token saved.");
     });
 
     // this.auth.refreshAccessToken();
@@ -225,23 +258,24 @@ export class SyncManager {
       calendarAccessResult =
         "No items received in test fetch. Starting loader anyway...";
     }
-    console.log('GoogleCalendarLoader:: ' + calendarAccessResult);
+    console.log("GoogleCalendarLoader:: " + calendarAccessResult);
     return calendarAccessResult;
   }
 
   async initialize(): Promise<string> {
-    
     // Test access to calendar by fetching one event
     this.loaderState.state = "Testing google-calendar access...";
-    console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
+    console.log("GoogleCalendarLoader.Initialize:: " + this.loaderState.state);
     try {
       this.loaderState.state = await this.test();
     } catch (error) {
       this.loaderState.state = `Error in testing google-calendar access: ${error}. Have you logged in to google-calendar?`;
-      console.log('GoogleCalendarLoader.Initialize:: ' + this.loaderState.state);
+      console.log(
+        "GoogleCalendarLoader.Initialize:: " + this.loaderState.state
+      );
       return this.loaderState.state;
     }
-  
+
     debugLog("Initializing sync manager...");
     this.loaderState.state = "Running";
     this.startPeriodicSync();
@@ -250,7 +284,7 @@ export class SyncManager {
       await this.cleanup();
       process.exit(0);
     });
-  
+
     return this.loaderState.state;
   }
 
@@ -259,73 +293,91 @@ export class SyncManager {
     await this.performIncrementalSync();
 
     // Schedule periodic syncs
-    this.syncInterval = setInterval(
-      async () => {
-        try {
-          await this.performIncrementalSync();
-        } catch (error) {
-          console.error("Periodic sync failed:", error);
-          this.loaderState.state = "Job restart required. Error in periodic sync: " + error;
-          clearInterval(this.syncInterval);
-        }
-      },
-      this.syncIntervalMinutes * 30000,
-    );
+    this.syncInterval = setInterval(async () => {
+      try {
+        await this.performIncrementalSync();
+      } catch (error) {
+        console.error("Periodic sync failed:", error);
+        this.loaderState.state =
+          "Job restart required. Error in periodic sync: " + error;
+        clearInterval(this.syncInterval);
+      }
+    }, this.syncIntervalMinutes * 30000);
   }
 
   async performIncrementalSync(calendarId: string = "primary"): Promise<void> {
     debugLog(`Starting incremental sync for calendar: ${calendarId}`);
     try {
-
       let syncState, pageToken, syncToken;
 
       do {
-
         syncState = await this.getSyncState(calendarId);
         syncToken = syncState?.sync_token;
 
-        const response = await this.calendar.events.list({
+        const response = (await this.calendar.events.list({
           calendarId,
           syncToken,
           pageToken,
           singleEvents: true,
           maxResults: 2500,
-        }) as GaxiosResponse<calendar_v3.Schema$Events>;
+        })) as GaxiosResponse<calendar_v3.Schema$Events>;
 
         if (response.status !== 200) {
-          throw new Error("Failed to fetch events. Job will be paused and require manual restart. Status: " + response.status + ': ' + response.statusText);
+          throw new Error(
+            "Failed to fetch events. Job will be paused and require manual restart. Status: " +
+              response.status +
+              ": " +
+              response.statusText
+          );
         }
 
         // Begin transaction to save events and update sync state
-        await db.transaction(async (conn) => {
-
+        await transaction(await getDB(), async (conn) => {
           if (response.data.items) {
-            console.log('GoogleCalendarLoader:: ' + "Fetched " + response.data.items.length + " events.");
-            await this.incrementallySaveEventsFromSyncResponse(response.data.items, calendarId, conn);
+            console.log(
+              "GoogleCalendarLoader:: " +
+                "Fetched " +
+                response.data.items.length +
+                " events."
+            );
+            await this.incrementallySaveEventsFromSyncResponse(
+              response.data.items,
+              calendarId,
+              conn
+            );
           }
 
           pageToken = response.data.nextPageToken || undefined;
 
           if (!pageToken && response.data.nextSyncToken) {
-            await this.updateSyncState(calendarId, response.data.nextSyncToken, conn);
+            await this.updateSyncState(
+              calendarId,
+              response.data.nextSyncToken,
+              conn
+            );
           }
-
         });
 
-        console.log('GoogleCalendarLoader:: ' + "Processed " + response.data.items?.length + " events & updated sync state.");
+        console.log(
+          "GoogleCalendarLoader:: " +
+            "Processed " +
+            response.data.items?.length +
+            " events & updated sync state."
+        );
       } while (pageToken);
 
       debugLog(`Completed incremental sync for calendar: ${calendarId}`);
     } catch (error) {
-
       if (this.isInvalidSyncTokenError(error)) {
-        console.log('GoogleCalendarLoader:: ' + "Sync token invalid.");
+        console.log("GoogleCalendarLoader:: " + "Sync token invalid.");
         await this.performFullSync(calendarId);
-        console.log('GoogleCalendarLoader:: ' + "Restarting incremental sync.");
+        console.log("GoogleCalendarLoader:: " + "Restarting incremental sync.");
         this.startPeriodicSync();
       } else {
-        console.log('GoogleCalendarLoader:: ' + "Unable to process events. " + error);
-        throw error; 
+        console.log(
+          "GoogleCalendarLoader:: " + "Unable to process events. " + error
+        );
+        throw error;
       }
     }
   }
@@ -333,33 +385,55 @@ export class SyncManager {
   private async incrementallySaveEventsFromSyncResponse(
     events: calendar_v3.Schema$Event[],
     calendarId: string,
-    conn: AsyncConnection
+    conn: Connection
   ): Promise<void> {
-  
     for (const event of events) {
-      const formattedEvent = this.formatEventData(event, calendarId, new Date().toISOString());
+      const formattedEvent = this.formatEventData(
+        event,
+        calendarId,
+        new Date().toISOString()
+      );
       if (event.status === "cancelled") {
         // Check if this is a cancellation/exception of a recurring event
         if (event.recurringEventId) {
-          debugLog('cancellation exception of a recurring event: ' + event.id + ': ' + event.summary + ' (recurring event id: ' + event.recurringEventId + ')');
+          debugLog(
+            "cancellation exception of a recurring event: " +
+              event.id +
+              ": " +
+              event.summary +
+              " (recurring event id: " +
+              event.recurringEventId +
+              ")"
+          );
           try {
             await this.insertEventsBatch([formattedEvent], conn);
           } catch (error) {
-            debugLog('Error fetching parent event: ' + error);
+            debugLog("Error fetching parent event: " + error);
           }
-        }
-        else {
+        } else {
           // Delete this single event
           try {
-            const result = await conn.run("DELETE FROM calendar_events WHERE id = ?", event.id);
+            const result = await conn.run(
+              "DELETE FROM calendar_events WHERE id = ?",
+              event.id
+            );
             debugLog("Deleted event: " + JSON.stringify(result));
           } catch (error) {
-            console.log('GoogleCalendarLoader:: ' + 'Error deleting single event: ' + error);
+            console.log(
+              "GoogleCalendarLoader:: " +
+                "Error deleting single event: " +
+                error
+            );
           }
         }
       } else {
         // Insert/update this event
-        debugLog('inserting event: ' + formattedEvent.id + ': ' + formattedEvent.summary);
+        debugLog(
+          "inserting event: " +
+            formattedEvent.id +
+            ": " +
+            formattedEvent.summary
+        );
         await this.insertEventsBatch([formattedEvent], conn);
       }
     }
@@ -367,7 +441,7 @@ export class SyncManager {
 
   private parseDateTime(
     dateTime: string | null | undefined,
-    date: string | null | undefined,
+    date: string | null | undefined
   ): string {
     if (dateTime) {
       return dateTime;
@@ -381,7 +455,7 @@ export class SyncManager {
   private formatEventData(
     event: calendar_v3.Schema$Event,
     calendarId: string,
-    timestamp: string,
+    timestamp: string
   ): CalendarEvent {
     const isAllDay = Boolean(event.start?.date);
     return {
@@ -410,7 +484,7 @@ export class SyncManager {
       original_start_time: event.originalStartTime
         ? this.parseDateTime(
             event.originalStartTime.dateTime,
-            event.originalStartTime.date,
+            event.originalStartTime.date
           )
         : null,
       extended_properties: event.extendedProperties
@@ -428,7 +502,10 @@ export class SyncManager {
     };
   }
 
-  private async insertEventsBatch(events: CalendarEvent[], conn: AsyncConnection): Promise<void> {
+  private async insertEventsBatch(
+    events: CalendarEvent[],
+    conn: Connection
+  ): Promise<void> {
     if (events.length === 0) return;
 
     let values;
@@ -506,12 +583,13 @@ export class SyncManager {
         ];
 
         const result: any = await conn.all(stmt, ...values);
-        console.log('GoogleCalendarLoader:: ' + "Rows inserted: " + result.length);
-        
+        console.log(
+          "GoogleCalendarLoader:: " + "Rows inserted: " + result.length
+        );
       } catch (error) {
         debugLog(values);
         console.error(`Error inserting event:`, error);
-        debugLog(`Error inserting event:`, event.id + ': ' + event.summary);
+        debugLog(`Error inserting event:`, event.id + ": " + event.summary);
         throw error;
       }
     }
@@ -520,45 +598,72 @@ export class SyncManager {
   async performFullSync(calendarId: string = "primary"): Promise<void> {
     debugLog(`Resetting calendar: ${calendarId}`);
     try {
-      await db.transaction(async (conn) => {
+      await transaction(await getDB(), async (conn) => {
+        const clearEvents: any = await conn.all(
+          "DELETE FROM calendar_events WHERE calendar_id = ?",
+          calendarId
+        );
+        console.log(
+          "GoogleCalendarLoader:: " +
+            "Truncated rows before full sync: " +
+            clearEvents.length
+        );
 
-        const clearEvents: any = await conn.all("DELETE FROM calendar_events WHERE calendar_id = ?", calendarId);
-        console.log('GoogleCalendarLoader:: ' + "Truncated rows before full sync: " + clearEvents.length);
-
-        const clearSyncState: any = await conn.all("DELETE FROM sync_state WHERE calendar_id = ?", calendarId);
-        console.log('GoogleCalendarLoader:: ' + "Deleted sync state: " + clearSyncState.length);
-
+        const clearSyncState: any = await conn.all(
+          "DELETE FROM sync_state WHERE calendar_id = ?",
+          calendarId
+        );
+        console.log(
+          "GoogleCalendarLoader:: " +
+            "Deleted sync state: " +
+            clearSyncState.length
+        );
       });
     } catch (error) {
-      console.log('GoogleCalendarLoader:: ' + 'Error in resetting calendar state: ' + error);
+      console.log(
+        "GoogleCalendarLoader:: " +
+          "Error in resetting calendar state: " +
+          error
+      );
       throw error;
     }
   }
 
   private async getSyncState(calendarId: string): Promise<SyncState | null> {
-    const result: any = await db.query(
+    const db = await getDB();
+    const result: any = await db.all(
       "SELECT sync_token, last_sync FROM sync_state WHERE calendar_id = ?",
       calendarId
     );
     if (!result || result.length === 0) {
       return null;
     }
-    debugLog('Sync state: ' + result[0].sync_token + ' ' + result[0].last_sync);
+    debugLog("Sync state: " + result[0].sync_token + " " + result[0].last_sync);
     return {
       sync_token: result[0].sync_token,
       last_sync: result[0].last_sync,
-    }
+    };
   }
 
   private async updateSyncState(
     calendarId: string,
     syncToken: string,
-    conn: AsyncConnection
+    conn: Connection
   ): Promise<void> {
     try {
-      await conn.run(`INSERT OR REPLACE INTO sync_state (calendar_id, sync_token, last_sync)
-         VALUES (?, ?, CURRENT_TIMESTAMP)`, calendarId, syncToken);
-      console.log('GoogleCalendarLoader:: ' + 'Sync state updated: ' + syncToken + ': ' + calendarId);
+      await conn.run(
+        `INSERT OR REPLACE INTO sync_state (calendar_id, sync_token, last_sync)
+         VALUES (?, ?, CURRENT_TIMESTAMP)`,
+        calendarId,
+        syncToken
+      );
+      console.log(
+        "GoogleCalendarLoader:: " +
+          "Sync state updated: " +
+          syncToken +
+          ": " +
+          calendarId
+      );
     } catch (err) {
       debugLog(err);
       throw err;
@@ -590,7 +695,6 @@ export class SyncManager {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
-    await db.close();
   }
 }
 
@@ -611,32 +715,32 @@ export async function createCalendarEvent(
   params: CreateEventParams
 ): Promise<calendar_v3.Schema$Event> {
   try {
-    const calendar = google.calendar({ version: 'v3', auth });
-    
+    const calendar = google.calendar({ version: "v3", auth });
+
     const event: calendar_v3.Schema$Event = {
       summary: params.summary,
       description: params.description,
       start: {
         dateTime: new Date(params.startDateTime).toISOString(),
-        timeZone: params.timeZone || 'UTC',
+        timeZone: params.timeZone || "UTC",
       },
       end: {
         dateTime: new Date(params.endDateTime).toISOString(),
-        timeZone: params.timeZone || 'UTC',
+        timeZone: params.timeZone || "UTC",
       },
       location: params.location,
-      attendees: params.attendees?.map(email => ({ email })),
+      attendees: params.attendees?.map((email) => ({ email })),
     };
 
     const response = await calendar.events.insert({
-      calendarId: 'primary',
+      calendarId: "primary",
       requestBody: event,
-      sendUpdates: 'all', // Sends email notifications to attendees
+      sendUpdates: "all", // Sends email notifications to attendees
     });
 
     return response.data;
   } catch (error) {
-    console.error('Error creating calendar event:', error);
+    console.error("Error creating calendar event:", error);
     throw error;
   }
 }

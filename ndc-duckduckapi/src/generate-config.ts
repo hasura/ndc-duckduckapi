@@ -1,9 +1,8 @@
 import { NotSupported, ObjectType } from "@hasura/ndc-sdk-typescript";
-import * as duckdb from "duckdb";
-import { AsyncConnection, DuckDBManager} from "./duckdb-connection-manager";
 import * as fs from "fs";
 import { promisify } from "util";
 import { DuckDBConfigurationSchema } from "./duckduckapi";
+import { Database } from "duckdb-async";
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 let HASURA_CONFIGURATION_DIRECTORY = process.env[
@@ -76,29 +75,32 @@ const determineType = (t: string): string => {
 };
 
 export async function generateConfig(
-  db: DuckDBManager,
+  db: Database
 ): Promise<DuckDBConfigurationSchema> {
   const tableNames: string[] = [];
   const tableAliases: { [k: string]: string } = {};
   const objectTypes: { [k: string]: ObjectType } = {};
-  
+
   // Get all tables with their comments
-  const tables = await db.query( "SHOW ALL TABLES");
-  
+  const tables = await db.all("SHOW ALL TABLES");
+
   // Get table comments
-  const tableComments = await db.query( `
+  const tableComments = await db.all(`
     SELECT table_name, comment 
     FROM duckdb_tables() 
     WHERE schema_name = 'main'
   `);
-  
+
   // Create a map of table comments for easier lookup
   const tableCommentMap = new Map(
-    tableComments.map(row => [row.table_name, row.comment || "No description available"])
+    tableComments.map((row) => [
+      row.table_name,
+      row.comment || "No description available",
+    ])
   );
 
   // Get all column comments upfront
-  const columnComments = await db.query( `
+  const columnComments = await db.all(`
     SELECT table_name, column_name, comment 
     FROM duckdb_columns() 
     WHERE schema_name = 'main'
@@ -110,7 +112,9 @@ export async function generateConfig(
     if (!columnCommentMap.has(row.table_name)) {
       columnCommentMap.set(row.table_name, new Map());
     }
-    columnCommentMap.get(row.table_name).set(row.column_name, row.comment || "No description available");
+    columnCommentMap
+      .get(row.table_name)
+      .set(row.column_name, row.comment || "No description available");
   }
 
   for (let table of tables) {
@@ -122,7 +126,8 @@ export async function generateConfig(
     if (!objectTypes[tableName]) {
       objectTypes[tableName] = {
         fields: {},
-        description: tableCommentMap.get(tableName) || "No description available"
+        description:
+          tableCommentMap.get(tableName) || "No description available",
       };
     }
 
@@ -136,7 +141,9 @@ export async function generateConfig(
             name: determineType(table.column_types[i]),
           },
         },
-        description: columnCommentMap.get(tableName)?.get(columnName) || "No description available"
+        description:
+          columnCommentMap.get(tableName)?.get(columnName) ||
+          "No description available",
       };
     }
   }
