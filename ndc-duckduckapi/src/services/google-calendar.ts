@@ -282,7 +282,6 @@ export class SyncManager {
 
     process.on("SIGINT", async () => {
       await this.cleanup();
-      process.exit(0);
     });
 
     return this.loaderState.state;
