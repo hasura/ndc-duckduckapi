@@ -419,13 +419,15 @@ export class SyncManager {
     const attachments = this.extractAttachments(message.payload);
     const { plainText, htmlContent } = this.extractBody(message.payload);
 
+    const now = formatDate(new Date());
+
     return {
       id: message.id!,
       thread_id: message.threadId!,
       label_ids: JSON.stringify(labelIds),
       snippet: message.snippet || null,
       history_id: message.historyId!,
-      internal_date: new Date(parseInt(message.internalDate!)).toISOString(),
+      internal_date: formatDate(new Date(parseInt(message.internalDate!))),
       size_estimate: message.sizeEstimate || 0,
       raw_size: message.payload?.body?.size || 0,
       message_id:
@@ -442,14 +444,14 @@ export class SyncManager {
       bcc_addresses: bcc
         ? JSON.stringify(bcc.split(",").map((e) => e.trim()))
         : null,
-      date: date || new Date().toISOString(),
+      date: date ? formatDate(new Date(date)) : now,
       body_plain: plainText,
       body_html: htmlContent,
       attachment_count: attachments.length,
       attachments: JSON.stringify(attachments),
       headers: JSON.stringify(headers),
       sync_status: "active",
-      last_synced: new Date().toISOString(),
+      last_synced: now,
       is_draft: labelIds.includes("DRAFT"),
       is_sent: labelIds.includes("SENT"),
       is_inbox: labelIds.includes("INBOX"),
@@ -718,4 +720,23 @@ export class SyncManager {
       clearInterval(this.syncInterval);
     }
   }
+}
+
+function formatDate(date: Date) {
+  const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  const ms = pad(date.getMilliseconds(), 3);
+
+  const offset = -date.getTimezoneOffset();
+  const offsetHours = pad(Math.abs(Math.floor(offset / 60)));
+  const offsetMinutes = pad(Math.abs(offset % 60));
+  const offsetSign = offset >= 0 ? "+" : "-";
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${ms}${offsetSign}${offsetHours}:${offsetMinutes}`;
 }
