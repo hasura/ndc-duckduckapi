@@ -18,7 +18,7 @@ if (
 const determineType = (t: string): string => {
   switch (t) {
     case "BIGINT":
-      return "Int";
+      return "BigInt";
     case "BIT":
       return "String";
     case "BOOLEAN":

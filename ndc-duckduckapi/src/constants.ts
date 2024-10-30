@@ -18,7 +18,59 @@ export const CAPABILITIES_RESPONSE: Capabilities = {
 };
 export const MAX_32_INT: number = 2147483647;
 export const SCALAR_TYPES: { [key: string]: ScalarType } = {
-  Int: {
+  BigInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {
+      // sum: {
+      //   result_type: {
+      //     type: "named",
+      //     name: "Int"
+      //   }
+      // }
+    },
+    comparison_operators: {
+      _eq: {
+        type: "equal",
+      },
+      _gt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Int",
+        },
+      },
+      _lt: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Int",
+        },
+      },
+      _gte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Int",
+        },
+      },
+      _lte: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Int",
+        },
+      },
+      _neq: {
+        type: "custom",
+        argument_type: {
+          type: "named",
+          name: "Int",
+        },
+      },
+    },
+  },  Int: {
     aggregate_functions: {
       // sum: {
       //   result_type: {
