@@ -1,3 +1,4 @@
+// What is the point of this file?
 import duckdb from 'duckdb';
 
 export class AsyncConnection {
@@ -37,6 +38,10 @@ export class DuckDBManager {
       this.connectionPool = [];
       this.maxConnections = 5;
       this.activeConnections = 0;
+    }
+
+    async releaseSyncConnection(){
+      this.activeConnections--;
     }
   
     async getSyncConnection(): Promise<duckdb.Connection> {
