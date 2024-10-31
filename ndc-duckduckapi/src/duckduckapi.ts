@@ -29,9 +29,9 @@ const DUCKDB_URL = "duck.db";
 let db: Database;
 export async function getDB() {
   if (!db) {
-    db = await Database.create(
-      (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL
-    );
+    const duckDBUrl = (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL;
+    db = await Database.create(duckDBUrl);
+    console.log("Created duckdb at", duckDBUrl);
   }
   return db;
 }
@@ -119,7 +119,7 @@ export interface duckduckapi {
 export async function makeConnector(
   dda: duckduckapi
 ): Promise<Connector<Configuration, State>> {
-  db = await Database.create(DUCKDB_URL);
+  db = await getDB();
 
   const lambdaSdkConnector = lambdaSdk.createConnector({
     functionsFilePath: dda.functionsFilePath,

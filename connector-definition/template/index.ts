@@ -14,7 +14,7 @@ const connectorConfig: duckduckapi = {
   `,
   functionsFilePath: path.resolve(__dirname, "./functions.ts"),
 };
- 
+
 (async () => {
   const connector = await makeConnector(connectorConfig);
   start(connector);
