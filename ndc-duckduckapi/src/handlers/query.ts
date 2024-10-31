@@ -252,6 +252,39 @@ function build_where(
   return sql;
 }
 
+function getColumnExpression(field_def: any, collection_alias: string, column: string): string {
+  // Helper function to handle the actual type
+  function handleNamedType(type: any): string {
+    if (type.name === "BigInt") {
+      return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+    }
+    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }
+
+  // Helper function to traverse the type structure
+  function processType(type: any): string {
+    if (type.type === "nullable") {
+      if (type.underlying_type.type === "named") {
+        return handleNamedType(type.underlying_type);
+      } else if (type.underlying_type.type === "array") {
+        // Handle array type
+        return processType(type.underlying_type);
+      } else {
+        return processType(type.underlying_type);
+      }
+    } else if (type.type === "array") {
+      // Handle array type
+      return processType(type.element_type);
+    } else if (type.type === "named") {
+      return handleNamedType(type);
+    }
+    // Default case
+    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }
+
+  return processType(field_def.type);
+}
+
 function build_query(
   config: Configuration,
   query_request: QueryRequest,
@@ -359,10 +392,10 @@ function build_query(
       collect_rows.push(escape_single(field_name));
       switch (field_value.type) {
         case "column":
+          const object_type = config.duckdbConfig.object_types[query_request.collection];
+          const field_def = object_type.fields[field_name];
           collect_rows.push(
-            `${escape_double(collection_alias)}.${escape_double(
-              field_value.column
-            )}`
+            getColumnExpression(field_def, collection_alias, field_value.column)
           );
           break;
         case "relationship":
