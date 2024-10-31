@@ -281,7 +281,6 @@ function getColumnExpression(field_def: any, collection_alias: string, column: s
     // Default case
     return `${escape_double(collection_alias)}.${escape_double(column)}`;
   }
-
   return processType(field_def.type);
 }
 
@@ -393,7 +392,7 @@ function build_query(
       switch (field_value.type) {
         case "column":
           const object_type = config.duckdbConfig.object_types[query_request.collection];
-          const field_def = object_type.fields[field_name];
+          let field_def = object_type.fields[field_value.column];
           collect_rows.push(
             getColumnExpression(field_def, collection_alias, field_value.column)
           );
