@@ -23,6 +23,8 @@ import { do_explain } from "./handlers/explain";
 import { perform_query, plan_queries } from "./handlers/query";
 import { generateConfig } from "./generate-config";
 import { Connection, Database } from "duckdb-async";
+import fs from "fs-extra";
+import path from "path";
 
 // Make a connection manager
 const DUCKDB_URL = "duck.db";
@@ -30,8 +32,14 @@ let db: Database;
 export async function getDB() {
   if (!db) {
     const duckDBUrl = (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL;
+
+    const dirPath = path.dirname(duckDBUrl);
+    if (dirPath !== ".") {
+      await fs.ensureDir(dirPath);
+    }
+
     db = await Database.create(duckDBUrl);
-    console.log("Created duckdb at", duckDBUrl);
+    console.log("Database file at", duckDBUrl);
   }
   return db;
 }
