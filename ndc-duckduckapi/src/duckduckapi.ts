@@ -17,7 +17,7 @@ import { Registry } from "prom-client";
 
 import * as lambdaSdk from "@hasura/ndc-lambda-sdk/connector";
 
-import { CAPABILITIES_RESPONSE, DUCKDB_CONFIG } from "./constants";
+import { CAPABILITIES_RESPONSE } from "./constants";
 import { do_get_schema } from "./handlers/schema";
 import { do_explain } from "./handlers/explain";
 import { perform_query, plan_queries } from "./handlers/query";
@@ -25,11 +25,13 @@ import { generateConfig } from "./generate-config";
 import { Connection, Database } from "duckdb-async";
 
 // Make a connection manager
-const DUCKDB_URL = "duck.db"; // process.env["DUCKDB_URL"] as string || "duck.db";
+const DUCKDB_URL = "duck.db";
 let db: Database;
 export async function getDB() {
   if (!db) {
-    db = await Database.create(DUCKDB_URL);
+    db = await Database.create(
+      (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL
+    );
   }
   return db;
 }
