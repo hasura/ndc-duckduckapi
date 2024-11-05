@@ -122,6 +122,11 @@ function getIntegerType(field_def: any): string | null {
   return checkType(field_def.type);
 }
 
+function getRhsExpression(type: string | null): string {
+  if (!type) return "?";
+  return `CAST(? AS ${type})`;
+}
+
 function build_where(
   expression: Expression,
   collection_relationships: {
@@ -152,6 +157,9 @@ function build_where(
       const field_def = object_type?.fields[expression.column.name];
       const isTimestamp = isTimestampType(field_def);
       const integerType = getIntegerType(field_def);
+      const type = isTimestamp ? "TIMESTAMP" : integerType;
+      const lhs = escape_double(expression.column.name);
+      const rhs = getRhsExpression(type);
       switch (expression.value.type) {
         case "scalar":
           args.push(expression.value.value);
@@ -168,53 +176,29 @@ function build_where(
       }
       switch (expression.operator) {
         case "_eq":
-          sql = isTimestamp 
-            ? `${escape_double(expression.column.name)} = CAST(? AS TIMESTAMP)`
-            : integerType
-            ? `${escape_double(expression.column.name)} = CAST(? AS ${integerType})`
-            : `${escape_double(expression.column.name)} = ?`;
+          sql = `${lhs} = ${rhs}`;
           break;
         case "_neq":
-          sql = isTimestamp 
-            ? `${escape_double(expression.column.name)} != CAST(? AS TIMESTAMP)`
-            : integerType
-            ? `${escape_double(expression.column.name)} != CAST(? AS ${integerType})`
-            : `${escape_double(expression.column.name)} != ?`;
+          sql = `${lhs} != ${rhs}`;
           break;
         case "_gt":
-          sql = isTimestamp 
-            ? `${escape_double(expression.column.name)} > CAST(? AS TIMESTAMP)`
-            : integerType
-            ? `${escape_double(expression.column.name)} > CAST(? AS ${integerType})`
-            : `${escape_double(expression.column.name)} > ?`;
+          sql = `${lhs} > ${rhs}`;
           break;
         case "_lt":
-          sql = isTimestamp 
-            ? `${escape_double(expression.column.name)} < CAST(? AS TIMESTAMP)`
-            : integerType
-            ? `${escape_double(expression.column.name)} < CAST(? AS ${integerType})`
-            : `${escape_double(expression.column.name)} < ?`;
+          sql = `${lhs} < ${rhs}`;
           break;
         case "_gte":
-          sql = isTimestamp 
-            ? `${escape_double(expression.column.name)} >= CAST(? AS TIMESTAMP)`
-            : integerType
-            ? `${escape_double(expression.column.name)} >= CAST(? AS ${integerType})`
-            : `${escape_double(expression.column.name)} >= ?`;
+          sql = `${lhs} >= ${rhs}`;
           break;
         case "_lte":
-          sql = isTimestamp 
-            ? `${escape_double(expression.column.name)} <= CAST(? AS TIMESTAMP)`
-            : integerType
-            ? `${escape_double(expression.column.name)} <= CAST(? AS ${integerType})`
-            : `${escape_double(expression.column.name)} <= ?`;
+          sql = `${lhs} <= ${rhs}`;
           break;
         case "_like":
           args[args.length - 1] = `%${args[args.length - 1]}%`;
-          sql = `${escape_double(expression.column.name)} LIKE ?`;
+          sql = `${lhs} LIKE ?`;
           break;
         case "_glob":
-          sql = `${escape_double(expression.column.name)} GLOB ?`;
+          sql = `${lhs} GLOB ?`;
           break;
         default:
           throw new Forbidden(
