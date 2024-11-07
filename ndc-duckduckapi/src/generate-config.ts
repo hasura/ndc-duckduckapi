@@ -30,7 +30,7 @@ const determineType = (t: string): string => {
     case "DOUBLE":
       return "Float";
     case "HUGEINT":
-      return "BigInt";
+      return "HugeInt";
     case "INTEGER":
       return "Int";
     case "INTERVAL":
@@ -50,9 +50,9 @@ const determineType = (t: string): string => {
     case "TINYINT":
       return "Int";
     case "UBIGINT":
-      return "BigInt";
+      return "UBigInt";
     case "UHUGEINT":
-      return "BigInt";
+      return "UHugeInt";
     case "UINTEGER":
       return "Int";
     case "USMALLINT":

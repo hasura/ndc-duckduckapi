@@ -87,6 +87,46 @@ function wrap_rows(s: string): string {
   `;
 }
 
+function isTimestampType(field_def: any): boolean {
+  if (!field_def) return false;
+  
+  function checkType(type: any): boolean {
+    if (type.type === "nullable") {
+      return checkType(type.underlying_type);
+    }
+    return type.type === "named" && type.name === "Timestamp";
+  }
+  
+  return checkType(field_def.type);
+}
+
+function getIntegerType(field_def: any): string | null {
+  if (!field_def) return null;
+  
+  function checkType(type: any): string | null {
+    if (type.type === "nullable") {
+      return checkType(type.underlying_type);
+    }
+    if (type.type === "named") {
+      switch (type.name) {
+        case "BigInt": return "BIGINT";
+        case "UBigInt": return "UBIGINT";
+        case "HugeInt": return "HUGEINT";
+        case "UHugeInt": return "UHUGEINT";
+        default: return null;
+      }
+    }
+    return null;
+  }
+  
+  return checkType(field_def.type);
+}
+
+function getRhsExpression(type: string | null): string {
+  if (!type) return "?";
+  return `CAST(? AS ${type})`;
+}
+
 function build_where(
   expression: Expression,
   collection_relationships: {
@@ -95,7 +135,9 @@ function build_where(
   args: any[],
   variables: QueryVariables,
   prefix: string,
-  collection_aliases: { [k: string]: string }
+  collection_aliases: { [k: string]: string },
+  config: Configuration,
+  query_request: QueryRequest
 ): string {
   let sql = "";
   switch (expression.type) {
@@ -111,6 +153,13 @@ function build_where(
       }
       break;
     case "binary_comparison_operator":
+      const object_type = config.duckdbConfig?.object_types[query_request.collection];
+      const field_def = object_type?.fields[expression.column.name];
+      const isTimestamp = isTimestampType(field_def);
+      const integerType = getIntegerType(field_def);
+      const type = isTimestamp ? "TIMESTAMP" : integerType;
+      const lhs = escape_double(expression.column.name);
+      const rhs = getRhsExpression(type);
       switch (expression.value.type) {
         case "scalar":
           args.push(expression.value.value);
@@ -127,33 +176,33 @@ function build_where(
       }
       switch (expression.operator) {
         case "_eq":
-          sql = `${expression.column.name} = ?`;
+          sql = `${lhs} = ${rhs}`;
+          break;
+        case "_neq":
+          sql = `${lhs} != ${rhs}`;
+          break;
+        case "_gt":
+          sql = `${lhs} > ${rhs}`;
+          break;
+        case "_lt":
+          sql = `${lhs} < ${rhs}`;
+          break;
+        case "_gte":
+          sql = `${lhs} >= ${rhs}`;
+          break;
+        case "_lte":
+          sql = `${lhs} <= ${rhs}`;
           break;
         case "_like":
           args[args.length - 1] = `%${args[args.length - 1]}%`;
-          sql = `${expression.column.name} LIKE ?`;
+          sql = `${lhs} LIKE ?`;
           break;
         case "_glob":
-          sql = `${expression.column.name} GLOB ?`;
-          break;
-        case "_neq":
-          sql = `${expression.column.name} != ?`;
-          break;
-        case "_gt":
-          sql = `${expression.column.name} > ?`;
-          break;
-        case "_lt":
-          sql = `${expression.column.name} < ?`;
-          break;
-        case "_gte":
-          sql = `${expression.column.name} >= ?`;
-          break;
-        case "_lte":
-          sql = `${expression.column.name} <= ?`;
+          sql = `${lhs} GLOB ?`;
           break;
         default:
           throw new Forbidden(
-            "Binary Comparison Custom Operator not implemented",
+            `Binary Comparison Custom Operator ${expression.operator} not implemented`,
             {}
           );
       }
@@ -170,7 +219,9 @@ function build_where(
             args,
             variables,
             prefix,
-            collection_aliases
+            collection_aliases,
+            config,
+            query_request
           );
           clauses.push(res);
         }
@@ -189,7 +240,9 @@ function build_where(
             args,
             variables,
             prefix,
-            collection_aliases
+            collection_aliases,
+            config,
+            query_request
           );
           clauses.push(res);
         }
@@ -203,7 +256,9 @@ function build_where(
         args,
         variables,
         prefix,
-        collection_aliases
+        collection_aliases,
+        config,
+        query_request
       );
       sql = `NOT (${not_result})`;
       break;
@@ -228,7 +283,9 @@ function build_where(
                   args,
                   variables,
                   prefix,
-                  collection_aliases
+                  collection_aliases,
+                  config,
+                  query_request
                 )
               : "1 = 1"
           }
@@ -366,7 +423,9 @@ function build_query(
           agg_args,
           variables,
           collection_alias,
-          config.duckdbConfig.collection_aliases
+          config.duckdbConfig.collection_aliases,
+          config,
+          query_request
         )})`
       );
     }
@@ -455,7 +514,9 @@ function build_query(
         args,
         variables,
         collection_alias,
-        config.duckdbConfig.collection_aliases
+        config.duckdbConfig.collection_aliases,
+        config,
+        query_request
       )})`
     );
   }

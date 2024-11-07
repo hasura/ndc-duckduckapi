@@ -38,39 +38,82 @@ export const SCALAR_TYPES: { [key: string]: ScalarType } = {
         type: "custom",
         argument_type: {
           type: "named",
-          name: "Int",
+          name: "BigInt",
         },
       },
       _lt: {
         type: "custom",
         argument_type: {
           type: "named",
-          name: "Int",
+          name: "BigInt",
         },
       },
       _gte: {
         type: "custom",
         argument_type: {
           type: "named",
-          name: "Int",
+          name: "BigInt",
         },
       },
       _lte: {
         type: "custom",
         argument_type: {
           type: "named",
-          name: "Int",
+          name: "BigInt",
         },
       },
       _neq: {
         type: "custom",
         argument_type: {
           type: "named",
-          name: "Int",
+          name: "BigInt",
         },
       },
     },
-  },  Int: {
+  },
+  UBigInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: { type: "equal" },
+      _gt: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _lt: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _gte: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _lte: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+      _neq: { type: "custom", argument_type: { type: "named", name: "UBigInt" }},
+    },
+  },
+  HugeInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: { type: "equal" },
+      _gt: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _lt: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _gte: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _lte: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+      _neq: { type: "custom", argument_type: { type: "named", name: "HugeInt" }},
+    },
+  },
+  UHugeInt: {
+    representation: {
+      type: "biginteger"
+    },
+    aggregate_functions: {},
+    comparison_operators: {
+      _eq: { type: "equal" },
+      _gt: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _lt: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _gte: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _lte: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+      _neq: { type: "custom", argument_type: { type: "named", name: "UHugeInt" }},
+    },
+  },
+  Int: {
     aggregate_functions: {
       // sum: {
       //   result_type: {
