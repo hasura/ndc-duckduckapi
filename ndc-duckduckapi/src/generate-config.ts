@@ -66,10 +66,9 @@ const determineType = (t: string): string => {
     case "JSON":
       return "JSON";
     default:
-      if (t.startsWith("DECIMAL")) {
-        return "Float";
+      if (t.startsWith("DECIMAL") || t.startsWith("NUMERIC")){
+        return "BigDecimal";
       }
-      console.log(t);
       throw new NotSupported("Unsupported type", {});
   }
 };
@@ -126,6 +125,7 @@ export async function generateConfig(
     if (!objectTypes[tableName]) {
       objectTypes[tableName] = {
         fields: {},
+        foreign_keys: {},
         description:
           tableCommentMap.get(tableName) || "No description available",
       };
