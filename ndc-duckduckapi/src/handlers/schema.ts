@@ -20,7 +20,6 @@ export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functions
         arguments: {},
         type: cn,
         uniqueness_constraints: {},
-        foreign_keys: {},
         description: object_types[cn].description
       });
     }

@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@hasura/ndc-lambda-sdk": "^1.9.0",
+    "@hasura/ndc-sdk-typescript": "^8.0.0-rc.0",
     "@tsconfig/node20": "^20.1.4",
     "duckdb": "^1.1.1",
     "duckdb-async": "^1.1.1",
