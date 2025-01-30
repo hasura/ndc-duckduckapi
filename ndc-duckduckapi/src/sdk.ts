@@ -6,9 +6,9 @@ export {
   getDB,
   transaction,
   getOAuthCredentialsFromHeader,
-  getTenantDB,
-  tenants,
+  getTenants,
   getTenantById,
+  getTenantDB,
   Tenant,
   TenantToken,
 } from "./duckduckapi";

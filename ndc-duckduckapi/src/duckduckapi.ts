@@ -49,7 +49,11 @@ export interface Tenant {
 
 export type TenantToken = string;
 
-export const tenants = new Map<TenantToken, Tenant>();
+const tenants = new Map<TenantToken, Tenant>();
+
+export function getTenants() {
+  return tenants;
+}
 
 export function getTenantById(tenantId: string): Tenant | null {
   for (let [_, tenant] of tenants.entries()) {
