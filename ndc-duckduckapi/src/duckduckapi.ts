@@ -350,7 +350,7 @@ async function openDatabaseFile(dbUrl: string): Promise<Database> {
   const db = await Database.create(dbPath);
   await db.run(DATABASE_SCHEMA);
 
-  console.log("Created database file at", dbPath);
+  console.log("Opened database file at", dbPath);
 
   return db;
 }
