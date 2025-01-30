@@ -119,7 +119,7 @@ export async function generateConfig(
 
   for (let table of tables) {
     const tableName = table.name;
-    const aliasName = `${table.database}.${table.schema}.${table.name}`;
+    const aliasName = `${table.schema}.${table.name}`;
     tableNames.push(tableName);
     tableAliases[tableName] = aliasName;
 
