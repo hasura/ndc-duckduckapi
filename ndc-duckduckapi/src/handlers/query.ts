@@ -17,136 +17,57 @@ import { Database } from "duckdb-async";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
-type QueryVariables = {
-  [key: string]: any;
-};
 
-export type SQLQuery = {
-  runSql: boolean;
-  runAgg: boolean;
-  runGroup: boolean;
-  sql: string;
-  args: any[];
-  aggSql: string;
-  aggArgs: any[];
-  groupSql: string;
-  groupArgs: any[];
-};
-
-const json_replacer = (key: string, value: any): any => {
-  if (typeof value === "bigint") {
-    return value.toString();
-  } else if (typeof value === "object" && value.type === "Buffer") {
-    return Buffer.from(value.data).toString();
-  } else if (
-    typeof value === "object" &&
-    value !== null &&
-    "months" in value &&
-    "days" in value &&
-    "micros" in value
-  ) {
-    // Convert to ISO 8601 duration format
-    const months = value.months;
-    const days = value.days;
-    const total_seconds = value.micros / 1e6; // Convert microseconds to seconds
-    // Construct the duration string
-    let duration = "P";
-    if (months > 0) duration += `${months}M`;
-    if (days > 0) duration += `${days}D`;
-    if (total_seconds > 0) duration += `T${total_seconds}S`;
-    return duration;
+function getBaseTypeName(t: Type): string | null {
+  if (t.type === 'named') {
+    return t.name;
   }
-  return value;
-};
-
-const formatSQLWithArgs = (sql: string, args: any[]): string => {
-  let index = 0;
-  return sql.replace(/\?/g, () => {
-    const arg = args[index++];
-    if (typeof arg === "string") {
-      return `'${arg}'`;
-    } else if (arg === null) {
-      return "NULL";
-    } else {
-      return arg;
-    }
-  });
-};
-
-function wrap_data(s: string): string {
-  return `
-  SELECT
-  (
-    ${s}
-  ) as data
-  `;
+  if (t.type === 'nullable') {
+    return getBaseTypeName(t.underlying_type);
+  }
+  if (t.type === 'array') {
+    return getBaseTypeName(t.element_type);
+  }
+  return null;
 }
 
-function wrap_rows(s: string): string {
-  return `
-  SELECT
-    JSON_OBJECT('rows', COALESCE(JSON_GROUP_ARRAY(JSON(r)), JSON('[]')))
-  FROM
-    (
-      ${s}
-    )
-  `;
+function getColumnExpression(field_def: ObjectField, collection_alias: string, column: string): string {
+  // Get the final named type (if any)
+  const typeName = getBaseTypeName(field_def.type);
+
+  // For BigInt variants, we convert to TEXT, else just use the raw column
+  switch (typeName) {
+    case "BigInt":
+    case "UBigInt":
+    case "HugeInt":
+    case "UHugeInt":
+      return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+    default:
+      // If it's not one of those special types (or no named type), return as is
+      return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }
 }
 
 function isStringType(field_def: ObjectField | undefined): boolean {
   if (!field_def) return false;
-  
-  function checkType(type: any): boolean {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    if (type.type === "array") {
-      return false;
-    }
-    return type.type === "named" && type.name === "String";
-  }
-  
-  return checkType(field_def.type);
+  return getBaseTypeName(field_def.type) === "String";
 }
 
 function isTimestampType(field_def: ObjectField | undefined): boolean {
   if (!field_def) return false;
-
-  function checkType(type: any): boolean {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    return type.type === "named" && (type.name === "Timestamp" || type.name === "TimestampTz");
-  }
-
-  return checkType(field_def.type);
+  const base = getBaseTypeName(field_def.type);
+  return base === "Timestamp" || base === "TimestampTz";
 }
 
 function getIntegerType(field_def: ObjectField | undefined): string | null {
   if (!field_def) return null;
-
-  function checkType(type: any): string | null {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    if (type.type === "named") {
-      switch (type.name) {
-        case "BigInt":
-          return "BIGINT";
-        case "UBigInt":
-          return "UBIGINT";
-        case "HugeInt":
-          return "HUGEINT";
-        case "UHugeInt":
-          return "UHUGEINT";
-        default:
-          return null;
-      }
-    }
-    return null;
+  switch (getBaseTypeName(field_def.type)) {
+    case "BigInt":   return "BIGINT";
+    case "UBigInt":  return "UBIGINT";
+    case "HugeInt":  return "HUGEINT";
+    case "UHugeInt": return "UHUGEINT";
+    default:         return null;
   }
-
-  return checkType(field_def.type);
 }
 
 function getRhsExpression(type: string | null): string {
@@ -240,6 +161,56 @@ function buildAggregateColumns(
     }
   }
   return agg_columns;
+}
+
+type QueryVariables = {
+  [key: string]: any;
+};
+
+export type SQLQuery = {
+  runSql: boolean;
+  runAgg: boolean;
+  runGroup: boolean;
+  sql: string;
+  args: any[];
+  aggSql: string;
+  aggArgs: any[];
+  groupSql: string;
+  groupArgs: any[];
+};
+
+const formatSQLWithArgs = (sql: string, args: any[]): string => {
+  let index = 0;
+  return sql.replace(/\?/g, () => {
+    const arg = args[index++];
+    if (typeof arg === "string") {
+      return `'${arg}'`;
+    } else if (arg === null) {
+      return "NULL";
+    } else {
+      return arg;
+    }
+  });
+};
+
+function wrap_data(s: string): string {
+  return `
+  SELECT
+  (
+    ${s}
+  ) as data
+  `;
+}
+
+function wrap_rows(s: string): string {
+  return `
+  SELECT
+    JSON_OBJECT('rows', COALESCE(JSON_GROUP_ARRAY(JSON(r)), JSON('[]')))
+  FROM
+    (
+      ${s}
+    )
+  `;
 }
 
 function build_where(
@@ -429,44 +400,121 @@ function build_where(
   return sql;
 }
 
-function getColumnExpression(
-  field_def: any,
+function buildGroupQuery(
+  query: Query,
+  query_request: QueryRequest,
+  config: Configuration,
+  collection: string,
   collection_alias: string,
-  column: string
+  path: string[]
 ): string {
-  // Helper function to handle the actual type
-  function handleNamedType(type: any): string {
-    if (type.name === "BigInt") {
-      return `CAST(${escape_double(collection_alias)}.${escape_double(
-        column
-      )} AS TEXT)`;
+  if (!query.groups){
+    throw new Forbidden("This shouldn't happen, the types lied!", {});
+  }
+  const { dimensions, aggregates } = query.groups!;
+
+  // Build dimension expressions
+  const dimensionExpressions = dimensions.map(dim => {
+    if (dim.type !== "column") {
+      throw new Forbidden("Only column dimensions are supported", {});
     }
-    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+    
+    const object_type = config.duckdbConfig?.object_types[query_request.collection];
+    const field_def = object_type?.fields[dim.column_name];
+    
+    if (!field_def) {
+      return `subq.${escape_double(dim.column_name)}`;
+    }
+    return `subq.${escape_double(dim.column_name)}`;
+  });
+
+  if (query.groups?.predicate) {
+    throw new Forbidden("Grouping with predicate not supported yet", {});
   }
 
-  // Helper function to traverse the type structure
-  function processType(type: any): string {
-    if (type.type === "nullable") {
-      if (type.underlying_type.type === "named") {
-        return handleNamedType(type.underlying_type);
-      } else if (type.underlying_type.type === "array") {
-        // Handle array type
-        return processType(type.underlying_type);
-      } else {
-        return processType(type.underlying_type);
+  const dimensionNames = dimensions.map(d => d.column_name);
+  const agg_columns = buildAggregateColumns(aggregates, "subq");
+
+  // Build select expressions
+  const selectExpressions = dimensions.map((dim, i) => {
+    const object_type = config.duckdbConfig?.object_types[query_request.collection];
+    const field_def = object_type?.fields[dim.column_name];
+    const integerType = getIntegerType(field_def);
+    const isString = isStringType(field_def);
+  
+    if (integerType) {
+      return [
+        `${dimensionExpressions[i]} as ${escape_double(`_sort_${dim.column_name}`)}`,
+        `CAST(${dimensionExpressions[i]} AS TEXT) as ${escape_double(dim.column_name)}`
+      ];
+    } else if (isString) {
+      return [
+        `${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`
+      ];
+    } else {
+      return [`${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`];
+    }
+  }).flat();
+
+  // Build order by clause
+  let orderByClause = '';
+  if (query.groups.order_by && query.groups.order_by.elements.length > 0) {
+    const orderElements = query.groups.order_by.elements.map(elem => {
+      if (elem.target.type === 'dimension') {
+        const dimension = dimensions[elem.target.index];
+        const object_type = config.duckdbConfig?.object_types[query_request.collection];
+        const field_def = object_type?.fields[dimension.column_name];
+        const integerType = getIntegerType(field_def);
+        const isString = isStringType(field_def);
+  
+        const columnName = integerType ? `_sort_${dimension.column_name}` : dimension.column_name;
+  
+        const columnExpression = isString 
+          ? `LOWER(${escape_double(columnName)})`
+          : `${escape_double(columnName)}`;
+  
+        return `${columnExpression} ${elem.order_direction}`;
       }
-    } else if (type.type === "array") {
-      // Handle array type
-      return processType(type.element_type);
-    } else if (type.type === "named") {
-      return handleNamedType(type);
-    }
-    // Default case
-    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+      throw new Forbidden(`Unsupported order by target type: ${elem.target.type}`, {});
+    });
+    orderByClause = `ORDER BY ${orderElements.join(', ')}`;
   }
-  return processType(field_def.type);
-}
 
+  // Build final SQL
+  let group_sql = `
+    SELECT 
+      COALESCE(
+        to_json(
+          list(
+            JSON_OBJECT(
+              'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
+              'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
+                `${escape_single(name)}, ${escape_double(name)}`
+              ).join(', ')})
+            )
+            ${orderByClause}
+          )
+        ),
+        JSON('[]')
+      ) as data
+    FROM (
+      SELECT
+        ${selectExpressions.join(',\n        ')},
+        ${agg_columns.join(', ')}
+      FROM (
+        SELECT * 
+        FROM ${collection} as ${escape_double(collection_alias)}
+      ) subq
+      GROUP BY ${dimensionExpressions.join(', ')}
+    ) grouped_data
+  `;
+
+  if (path.length === 1) {
+    group_sql = wrap_data(group_sql);
+  }
+
+  return group_sql;
+}
 
 function build_query(
   config: Configuration,
@@ -573,102 +621,6 @@ function build_query(
         default:
           throw new Conflict("The types tricked me. 😭", {});
       }
-    }
-  }
-
-  if (query.groups) {
-    run_group = true;
-    const { dimensions, aggregates } = query.groups;
-
-    const dimensionExpressions = dimensions.map(dim => {
-      if (dim.type !== "column") {
-        throw new Forbidden("Only column dimensions are supported", {});
-      }
-      
-      const object_type = config.duckdbConfig?.object_types[query_request.collection];
-      const field_def = object_type?.fields[dim.column_name];
-      
-      if (!field_def) {
-        return `subq.${escape_double(dim.column_name)}`;
-      }
-
-      function handleNamedType(type: Type): string {
-        if (type.type != "named") {
-          throw new Forbidden("Named type must be named type", {});
-        }
-        switch (type.name) {
-          case "BigInt":
-          case "UBigInt":
-          case "HugeInt":
-          case "UHugeInt":
-            return `CAST(subq.${escape_double(dim.column_name)} AS TEXT)`;
-          default:
-            return `subq.${escape_double(dim.column_name)}`;
-        }
-      }
-
-      function processType(type: Type): string {
-        if (type.type === "nullable") {
-          if (type.underlying_type.type === "named") {
-            return handleNamedType(type.underlying_type);
-          } else if (type.underlying_type.type === "array") {
-            return processType(type.underlying_type);
-          } else {
-            return processType(type.underlying_type);
-          }
-        } else if (type.type === "array") {
-          return processType(type.element_type);
-        } else if (type.type === "named") {
-          return handleNamedType(type);
-        }
-        return `subq.${escape_double(dim.column_name)}`;
-      }
-
-      return processType(field_def.type);
-    });
-
-    if (query.groups.order_by){
-      throw new Forbidden("Grouping order by not supported yet", {});
-    }
-
-    if (query.groups.predicate){
-      throw new Forbidden("Grouping with predicate not supported yet", {});
-    }
-
-    const dimensionNames = dimensions.map(d => d.column_name);
-
-    const agg_columns = buildAggregateColumns(aggregates, "subq");
-
-    group_sql = `
-    SELECT COALESCE(
-      JSON_GROUP_ARRAY(
-        JSON_OBJECT(
-          'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
-          'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
-            `${escape_single(name)}, ${escape_double(name)}`
-          ).join(', ')})
-        )
-      ),
-      JSON('[]')
-    ) as data
-    FROM (
-      SELECT
-        ${dimensionExpressions.map((expr, i) => `${expr} as ${escape_double(dimensionNames[i])}`).join(', ')},
-        ${agg_columns.join(', ')}
-      FROM (
-        SELECT * 
-        FROM ${collection} as ${escape_double(collection_alias)}
-        ${""}
-        ${""}
-        ${query.groups.limit ? query.groups.limit : ""}
-        ${query.groups.offset ? query.groups.offset : ""}
-      ) subq
-      GROUP BY ${dimensionExpressions.join(', ')}
-    ) grouped_data
-  `;
-
-    if (path.length === 1) {
-      group_sql = wrap_data(group_sql);
     }
   }
 
@@ -811,6 +763,11 @@ ${offset_sql}
         ${offset_sql}
       ) subq
     `);
+  }
+
+  if (query.groups) {
+    run_group = true;
+    group_sql = buildGroupQuery(query, query_request, config, collection, collection_alias, path);
   }
 
   if (path.length === 1) {
