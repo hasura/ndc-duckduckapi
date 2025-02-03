@@ -275,8 +275,6 @@ function build_where(
         throw new Forbidden("Binary Comparison Operator Aggregate not implemented", {});
       }
       const object_type = config.duckdbConfig?.object_types[query_request.collection];
-      const object_type =
-        config.duckdbConfig?.object_types[query_request.collection];
       const field_def = object_type?.fields[expression.column.name];
       const isTimestamp = isTimestampType(field_def);
       const integerType = getIntegerType(field_def);
@@ -437,31 +435,17 @@ function getColumnExpression(
   column: string
 ): string {
   // Helper function to handle the actual type
-  function handleNamedType(type: Type): string {
-    if (type.type != "named"){
-      throw new Forbidden("Named type must be named type", {});
-    }
-    switch (type.name){
-      case "BigInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      case "UBigInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      case "HugeInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      case "UHugeInt":
-        return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
-      default:
-        return `${escape_double(collection_alias)}.${escape_double(column)}`;
   function handleNamedType(type: any): string {
     if (type.name === "BigInt") {
       return `CAST(${escape_double(collection_alias)}.${escape_double(
         column
       )} AS TEXT)`;
     }
+    return `${escape_double(collection_alias)}.${escape_double(column)}`;
   }
 
   // Helper function to traverse the type structure
-  function processType(type: Type): string {
+  function processType(type: any): string {
     if (type.type === "nullable") {
       if (type.underlying_type.type === "named") {
         return handleNamedType(type.underlying_type);
@@ -482,6 +466,7 @@ function getColumnExpression(
   }
   return processType(field_def.type);
 }
+
 
 function build_query(
   config: Configuration,
@@ -921,27 +906,9 @@ export async function perform_query(
   const response: RowSet[] = [];
   for (let query_plan of query_plans) {
     try {
-      const connection = await state.client.connect();
+      const connection = await db.connect();
       let row_set: RowSet = {};  // Start with empty object
 
-      const connection = await db.connect();
-      let row_set: RowSet = { rows: [] };
-
-      // Handle aggregate query if present
-      if (query_plan.runAgg) {
-        const aggRes = await do_all(connection, {
-          runSql: true,
-          runAgg: false,
-          sql: query_plan.aggSql,
-          args: query_plan.aggArgs,
-          aggSql: "",
-          aggArgs: [],
-        });
-        const parsedAggData = JSON.parse(aggRes[0]["data"]);
-        row_set.aggregates = parsedAggData;
-      }
-
-      // Handle regular query if present
       if (query_plan.runSql) {
         const res = await do_all(connection, query_plan.sql, query_plan.args);
         const regular_results = JSON.parse(res[0]["data"]);
