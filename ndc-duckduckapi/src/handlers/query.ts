@@ -7,6 +7,8 @@ import {
   Forbidden,
   Conflict,
   Relationship,
+  Type,
+  ObjectField
 } from "@hasura/ndc-sdk-typescript";
 import { Configuration } from "../duckduckapi";
 const SqlString = require("sqlstring-sqlite");
@@ -15,6 +17,152 @@ import { Database } from "duckdb-async";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
+
+function getBaseTypeName(t: Type): string | null {
+  if (t.type === 'named') {
+    return t.name;
+  }
+  if (t.type === 'nullable') {
+    return getBaseTypeName(t.underlying_type);
+  }
+  if (t.type === 'array') {
+    return getBaseTypeName(t.element_type);
+  }
+  return null;
+}
+
+function getColumnExpression(field_def: ObjectField, collection_alias: string, column: string): string {
+  // Get the final named type (if any)
+  const typeName = getBaseTypeName(field_def.type);
+
+  // For BigInt variants, we convert to TEXT, else just use the raw column
+  switch (typeName) {
+    case "BigInt":
+    case "UBigInt":
+    case "HugeInt":
+    case "UHugeInt":
+      return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
+    default:
+      // If it's not one of those special types (or no named type), return as is
+      return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }
+}
+
+function isStringType(field_def: ObjectField | undefined): boolean {
+  if (!field_def) return false;
+  return getBaseTypeName(field_def.type) === "String";
+}
+
+function isTimestampType(field_def: ObjectField | undefined): boolean {
+  if (!field_def) return false;
+  const base = getBaseTypeName(field_def.type);
+  return base === "Timestamp" || base === "TimestampTz";
+}
+
+function getIntegerType(field_def: ObjectField | undefined): string | null {
+  if (!field_def) return null;
+  switch (getBaseTypeName(field_def.type)) {
+    case "BigInt":   return "BIGINT";
+    case "UBigInt":  return "UBIGINT";
+    case "HugeInt":  return "HUGEINT";
+    case "UHugeInt": return "UHUGEINT";
+    default:         return null;
+  }
+}
+
+function getRhsExpression(type: string | null): string {
+  if (!type) return "?";
+  return `CAST(? AS ${type})`;
+}
+
+function buildSingleColumnAggregate(column: string, func: string, agg_name: string): string {
+  switch (func) {
+    // Basic aggregates
+    case "_sum": 
+      return `SUM(${column}) as ${escape_double(agg_name)}`;
+    case "_avg": 
+      return `AVG(${column}) as ${escape_double(agg_name)}`;
+    case "_max": 
+      return `MAX(${column}) as ${escape_double(agg_name)}`;
+    case "_min": 
+      return `MIN(${column}) as ${escape_double(agg_name)}`;
+    
+    // Statistical functions
+    case "_stddev":
+    case "_stddev_samp": {
+      const formula = `SQRT(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * (COUNT(*) - 1))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    case "_stddev_pop": {
+      const formula = `SQRT(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * COUNT(*))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    case "_variance":
+    case "_var_samp": {
+      const formula = `(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * (COUNT(*) - 1))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    case "_var_pop": {
+      const formula = `(
+        (COUNT(*) * SUM(POWER(CAST(${column} AS REAL), 2)) - POWER(SUM(CAST(${column} AS REAL)), 2))
+        / (COUNT(*) * COUNT(*))
+      )`;
+      return `${formula} as ${escape_double(agg_name)}`;
+    }
+    
+    // String aggregates
+    case "_group_concat":
+      return `GROUP_CONCAT(${column}) as ${escape_double(agg_name)}`;
+    case "_group_concat_distinct":
+      return `GROUP_CONCAT(DISTINCT ${column}) as ${escape_double(agg_name)}`;
+    case "_group_concat_include_nulls":
+      return `GROUP_CONCAT(COALESCE(${column}, 'NULL')) as ${escape_double(agg_name)}`;
+    default:
+      throw new Forbidden(`Unsupported aggregate function: ${func}`, {});
+  }
+}
+
+function buildAggregateColumns(
+  aggregates: { [key: string]: any }, 
+  subquery_prefix: string = 'subq'
+): string[] {
+  const agg_columns: string[] = [];
+  for (const [agg_name, agg_value] of Object.entries(aggregates)) {
+    switch (agg_value.type) {
+      case "star_count": 
+        agg_columns.push(`COUNT(*) as ${escape_double(agg_name)}`);
+        break;
+      case "column_count": {
+        const column = `${subquery_prefix}.${escape_double(agg_value.column)}`;
+        const column_expr = agg_value.distinct
+          ? `COUNT(DISTINCT ${column})`
+          : `COUNT(${column})`;
+        agg_columns.push(`${column_expr} as ${escape_double(agg_name)}`);
+        break;
+      }
+      case "single_column": {
+        const column = `${subquery_prefix}.${escape_double(agg_value.column)}`;
+        agg_columns.push(
+          buildSingleColumnAggregate(column, agg_value.function, agg_name)
+        );
+        break;
+      }
+      default:
+        throw new Forbidden(`Unsupported aggregate type: ${agg_value.type}`, {});
+    }
+  }
+  return agg_columns;
+}
+
 type QueryVariables = {
   [key: string]: any;
 };
@@ -22,36 +170,13 @@ type QueryVariables = {
 export type SQLQuery = {
   runSql: boolean;
   runAgg: boolean;
+  runGroup: boolean;
   sql: string;
   args: any[];
   aggSql: string;
   aggArgs: any[];
-};
-
-const json_replacer = (key: string, value: any): any => {
-  if (typeof value === "bigint") {
-    return value.toString();
-  } else if (typeof value === "object" && value.type === "Buffer") {
-    return Buffer.from(value.data).toString();
-  } else if (
-    typeof value === "object" &&
-    value !== null &&
-    "months" in value &&
-    "days" in value &&
-    "micros" in value
-  ) {
-    // Convert to ISO 8601 duration format
-    const months = value.months;
-    const days = value.days;
-    const total_seconds = value.micros / 1e6; // Convert microseconds to seconds
-    // Construct the duration string
-    let duration = "P";
-    if (months > 0) duration += `${months}M`;
-    if (days > 0) duration += `${days}D`;
-    if (total_seconds > 0) duration += `T${total_seconds}S`;
-    return duration;
-  }
-  return value;
+  groupSql: string;
+  groupArgs: any[];
 };
 
 const formatSQLWithArgs = (sql: string, args: any[]): string => {
@@ -88,51 +213,6 @@ function wrap_rows(s: string): string {
   `;
 }
 
-function isTimestampType(field_def: any): boolean {
-  if (!field_def) return false;
-
-  function checkType(type: any): boolean {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    return type.type === "named" && type.name === "Timestamp";
-  }
-
-  return checkType(field_def.type);
-}
-
-function getIntegerType(field_def: any): string | null {
-  if (!field_def) return null;
-
-  function checkType(type: any): string | null {
-    if (type.type === "nullable") {
-      return checkType(type.underlying_type);
-    }
-    if (type.type === "named") {
-      switch (type.name) {
-        case "BigInt":
-          return "BIGINT";
-        case "UBigInt":
-          return "UBIGINT";
-        case "HugeInt":
-          return "HUGEINT";
-        case "UHugeInt":
-          return "UHUGEINT";
-        default:
-          return null;
-      }
-    }
-    return null;
-  }
-
-  return checkType(field_def.type);
-}
-
-function getRhsExpression(type: string | null): string {
-  if (!type) return "?";
-  return `CAST(? AS ${type})`;
-}
-
 function build_where(
   expression: Expression,
   collection_relationships: {
@@ -148,6 +228,9 @@ function build_where(
   let sql = "";
   switch (expression.type) {
     case "unary_comparison_operator":
+      if (expression.column.type === "aggregate"){
+        throw new Forbidden("Binary Comparison Operator Aggregate not implemented", {});
+      }
       switch (expression.operator) {
         case "is_null":
           sql = `${expression.column.name} IS NULL`;
@@ -159,8 +242,10 @@ function build_where(
       }
       break;
     case "binary_comparison_operator":
-      const object_type =
-        config.duckdbConfig?.object_types[query_request.collection];
+      if (expression.column.type === "aggregate"){
+        throw new Forbidden("Binary Comparison Operator Aggregate not implemented", {});
+      }
+      const object_type = config.duckdbConfig?.object_types[query_request.collection];
       const field_def = object_type?.fields[expression.column.name];
       const isTimestamp = isTimestampType(field_def);
       const integerType = getIntegerType(field_def);
@@ -201,7 +286,6 @@ function build_where(
           sql = `${lhs} <= ${rhs}`;
           break;
         case "_like":
-          args[args.length - 1] = `%${args[args.length - 1]}%`;
           sql = `${lhs} LIKE ?`;
           break;
         case "_glob":
@@ -289,7 +373,7 @@ function build_where(
                   collection_relationships,
                   args,
                   variables,
-                  prefix,
+                  subquery_alias,
                   collection_aliases,
                   config,
                   query_request
@@ -316,42 +400,120 @@ function build_where(
   return sql;
 }
 
-function getColumnExpression(
-  field_def: any,
+function buildGroupQuery(
+  query: Query,
+  query_request: QueryRequest,
+  config: Configuration,
+  collection: string,
   collection_alias: string,
-  column: string
+  path: string[]
 ): string {
-  // Helper function to handle the actual type
-  function handleNamedType(type: any): string {
-    if (type.name === "BigInt") {
-      return `CAST(${escape_double(collection_alias)}.${escape_double(
-        column
-      )} AS TEXT)`;
+  if (!query.groups){
+    throw new Forbidden("This shouldn't happen, the types lied!", {});
+  }
+  const { dimensions, aggregates } = query.groups!;
+
+  // Build dimension expressions
+  const dimensionExpressions = dimensions.map(dim => {
+    if (dim.type !== "column") {
+      throw new Forbidden("Only column dimensions are supported", {});
     }
-    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+    
+    const object_type = config.duckdbConfig?.object_types[query_request.collection];
+    const field_def = object_type?.fields[dim.column_name];
+    
+    if (!field_def) {
+      return `subq.${escape_double(dim.column_name)}`;
+    }
+    return `subq.${escape_double(dim.column_name)}`;
+  });
+
+  if (query.groups?.predicate) {
+    throw new Forbidden("Grouping with predicate not supported yet", {});
   }
 
-  // Helper function to traverse the type structure
-  function processType(type: any): string {
-    if (type.type === "nullable") {
-      if (type.underlying_type.type === "named") {
-        return handleNamedType(type.underlying_type);
-      } else if (type.underlying_type.type === "array") {
-        // Handle array type
-        return processType(type.underlying_type);
-      } else {
-        return processType(type.underlying_type);
-      }
-    } else if (type.type === "array") {
-      // Handle array type
-      return processType(type.element_type);
-    } else if (type.type === "named") {
-      return handleNamedType(type);
+  const dimensionNames = dimensions.map(d => d.column_name);
+  const agg_columns = buildAggregateColumns(aggregates, "subq");
+
+  // Build select expressions
+  const selectExpressions = dimensions.map((dim, i) => {
+    const object_type = config.duckdbConfig?.object_types[query_request.collection];
+    const field_def = object_type?.fields[dim.column_name];
+    const integerType = getIntegerType(field_def);
+    const isString = isStringType(field_def);
+  
+    if (integerType) {
+      return [
+        `${dimensionExpressions[i]} as ${escape_double(`_sort_${dim.column_name}`)}`,
+        `CAST(${dimensionExpressions[i]} AS TEXT) as ${escape_double(dim.column_name)}`
+      ];
+    } else if (isString) {
+      return [
+        `${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`
+      ];
+    } else {
+      return [`${dimensionExpressions[i]} as ${escape_double(dim.column_name)}`];
     }
-    // Default case
-    return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  }).flat();
+
+  // Build order by clause
+  let orderByClause = '';
+  if (query.groups.order_by && query.groups.order_by.elements.length > 0) {
+    const orderElements = query.groups.order_by.elements.map(elem => {
+      if (elem.target.type === 'dimension') {
+        const dimension = dimensions[elem.target.index];
+        const object_type = config.duckdbConfig?.object_types[query_request.collection];
+        const field_def = object_type?.fields[dimension.column_name];
+        const integerType = getIntegerType(field_def);
+        const isString = isStringType(field_def);
+  
+        const columnName = integerType ? `_sort_${dimension.column_name}` : dimension.column_name;
+  
+        const columnExpression = isString 
+          ? `LOWER(${escape_double(columnName)})`
+          : `${escape_double(columnName)}`;
+  
+        return `${columnExpression} ${elem.order_direction}`;
+      }
+      throw new Forbidden(`Unsupported order by target type: ${elem.target.type}`, {});
+    });
+    orderByClause = `ORDER BY ${orderElements.join(', ')}`;
   }
-  return processType(field_def.type);
+
+  // Build final SQL
+  let group_sql = `
+    SELECT 
+      COALESCE(
+        to_json(
+          list(
+            JSON_OBJECT(
+              'dimensions', JSON_ARRAY(${dimensionNames.map(name => escape_double(name)).join(', ')}),
+              'aggregates', JSON_OBJECT(${Object.keys(aggregates).map(name => 
+                `${escape_single(name)}, ${escape_double(name)}`
+              ).join(', ')})
+            )
+            ${orderByClause}
+          )
+        ),
+        JSON('[]')
+      ) as data
+    FROM (
+      SELECT
+        ${selectExpressions.join(',\n        ')},
+        ${agg_columns.join(', ')}
+      FROM (
+        SELECT * 
+        FROM ${collection} as ${escape_double(collection_alias)}
+      ) subq
+      GROUP BY ${dimensionExpressions.join(', ')}
+    ) grouped_data
+  `;
+
+  if (path.length === 1) {
+    group_sql = wrap_data(group_sql);
+  }
+
+  return group_sql;
 }
 
 function build_query(
@@ -363,6 +525,7 @@ function build_query(
   variables: QueryVariables,
   args: any[],
   agg_args: any[],
+  group_args: any[],
   relationship_key: string | null,
   collection_relationships: {
     [k: string]: Relationship;
@@ -374,88 +537,20 @@ function build_query(
   }
   let sql = "";
   let agg_sql = "";
+  let group_sql = "";
   let run_sql = false;
   let run_agg = false;
+  let run_group = false;
   path.push(collection);
   let collection_alias = path.join("_");
+  let from_sql = `${collection} as ${escape_double(collection_alias)}`;
 
   let limit_sql = ``;
   let offset_sql = ``;
   let order_by_sql = ``;
   let collect_rows = [];
   let where_conditions = ["WHERE 1"];
-
-  if (query.aggregates) {
-    run_agg = true;
-    let agg_columns: string[] = [];
-
-    // Process each aggregate
-    for (const [agg_name, agg_value] of Object.entries(query.aggregates)) {
-      if (agg_value.type === "star_count") {
-        agg_columns.push(`COUNT(*) as ${escape_double(agg_name)}`);
-      } else if (agg_value.type === "column_count") {
-        // Handle column count aggregation
-        const column_expr = agg_value.distinct
-          ? `COUNT(DISTINCT ${escape_double(collection_alias)}.${escape_double(
-              agg_value.column
-            )})`
-          : `COUNT(${escape_double(collection_alias)}.${escape_double(
-              agg_value.column
-            )})`;
-        agg_columns.push(`${column_expr} as ${escape_double(agg_name)}`);
-      } else {
-        throw new Forbidden(
-          `Aggregate type ${agg_value.type} not implemented yet!`,
-          {}
-        );
-      }
-    }
-
-    let from_sql = `${collection} as ${escape_double(collection_alias)}`;
-    if (path.length > 1 && relationship_key !== null) {
-      let relationship =
-        query_request.collection_relationships[relationship_key];
-      let parent_alias = path.slice(0, -1).join("_");
-      let relationship_alias =
-        config.duckdbConfig.collection_aliases[relationship.target_collection];
-      from_sql = `${relationship_alias} as ${escape_double(collection_alias)}`;
-      where_conditions.push(
-        ...Object.entries(relationship.column_mapping).map(([from, to]) => {
-          return `${escape_double(parent_alias)}.${escape_double(
-            from
-          )} = ${escape_double(collection_alias)}.${escape_double(to)}`;
-        })
-      );
-    }
-
-    if (query.predicate) {
-      where_conditions.push(
-        `(${build_where(
-          query.predicate,
-          query_request.collection_relationships,
-          agg_args,
-          variables,
-          collection_alias,
-          config.duckdbConfig.collection_aliases,
-          config,
-          query_request
-        )})`
-      );
-    }
-
-    agg_sql = wrap_data(`
-      SELECT JSON_OBJECT(
-        ${agg_columns
-          .map((col) => {
-            const parts = col.split(" as ");
-            return `${escape_single(parts[1].replace(/"/g, ""))}, ${parts[0]}`;
-          })
-          .join(",")}
-      ) as data
-      FROM ${from_sql}
-      ${where_conditions.join(" AND ")}
-    `);
-  }
+  let agg_where_conditions = ["WHERE 1"];
 
   if (query.fields) {
     run_sql = true;
@@ -476,24 +571,50 @@ function build_query(
               .target_collection;
           let relationship_collection_alias =
             config.duckdbConfig.collection_aliases[relationship_collection];
+            
+          const subquery = build_query(
+              config,
+              query_request,
+              relationship_collection_alias,
+              field_value.query,
+              path,
+              variables,
+              args,
+              agg_args,
+              group_args,
+              field_value.relationship,
+              collection_relationships,
+              collection_aliases
+            );
+  
+          let relationship_sql = '';
+          const hasOnlyAggregates = subquery.runAgg && !field_value.query.fields;
+
+          if (hasOnlyAggregates) {
+            relationship_sql = `
+              SELECT JSON_OBJECT(
+                'aggregates', (
+                  ${subquery.aggSql}
+                )
+              )
+            `;
+          } else if (subquery.runAgg) {
+            relationship_sql = `
+              SELECT JSON_OBJECT(
+                'rows', JSON((${subquery.sql})).rows,
+                'aggregates', (
+                  ${subquery.aggSql}
+                )
+              )
+            `;
+          } else {
+            relationship_sql = subquery.sql;
+          }
+
           collect_rows.push(
             `COALESCE((
-              ${
-                build_query(
-                  config,
-                  query_request,
-                  relationship_collection_alias,
-                  field_value.query,
-                  path,
-                  variables,
-                  args,
-                  agg_args,
-                  field_value.relationship,
-                  collection_relationships,
-                  collection_aliases
-                ).sql
-              }), JSON('[]')
-            )`
+              ${relationship_sql}
+            ), JSON('[]'))`
           );
           path.pop();
           break;
@@ -502,19 +623,21 @@ function build_query(
       }
     }
   }
-  let from_sql = `${collection} as ${escape_double(collection_alias)}`;
+
   if (path.length > 1 && relationship_key !== null) {
     let relationship = query_request.collection_relationships[relationship_key];
     let parent_alias = path.slice(0, -1).join("_");
     let relationship_alias =
       config.duckdbConfig.collection_aliases[relationship.target_collection];
     from_sql = `${relationship_alias} as ${escape_double(collection_alias)}`;
+    const condition = Object.entries(relationship.column_mapping).map(([from, to]) => {
+      return `${escape_double(parent_alias)}.${escape_double(from)} = ${escape_double(collection_alias)}.${escape_double(to)}`;
+    });
     where_conditions.push(
-      ...Object.entries(relationship.column_mapping).map(([from, to]) => {
-        return `${escape_double(parent_alias)}.${escape_double(
-          from
-        )} = ${escape_double(collection_alias)}.${escape_double(to)}`;
-      })
+      ...condition
+    );
+    agg_where_conditions.push(
+      ...condition
     );
   }
 
@@ -533,6 +656,7 @@ function build_query(
         query_request
       )})`
     );
+    agg_where_conditions.push(`(${build_where(query.predicate, query_request.collection_relationships, agg_args, variables, collection_alias, config.duckdbConfig.collection_aliases, config, query_request)})`);
   }
 
   if (query.order_by && config.duckdbConfig) {
@@ -541,13 +665,16 @@ function build_query(
       switch (elem.target.type) {
         case "column":
           if (elem.target.path.length === 0) {
+            const field_def = config.duckdbConfig.object_types[query_request.collection].fields[elem.target.name];
+            const is_string = isStringType(field_def);
+            const field_name = is_string ? `${escape_double(collection_alias)}.${escape_double(elem.target.name)} COLLATE NOCASE` : `${escape_double(collection_alias)}.${escape_double(elem.target.name)}`
             order_elems.push(
-              `${escape_double(collection_alias)}.${escape_double(
-                elem.target.name
-              )} ${elem.order_direction}`
+              `${field_name} ${elem.order_direction}`
             );
           } else {
             let currentAlias = collection_alias;
+            let current_collection = query_request.collection;
+            let field_def = config.duckdbConfig.object_types[current_collection].fields[elem.target.name];
             for (let path_elem of elem.target.path) {
               const relationship =
                 collection_relationships[path_elem.relationship];
@@ -568,18 +695,20 @@ function build_query(
                 filter_joins.push(join_str);
               }
               currentAlias = nextAlias;
+              current_collection = relationship.target_collection;
+              field_def = config.duckdbConfig.object_types[current_collection].fields[elem.target.name];
             }
+            const is_string = isStringType(field_def);
+            const field_name = is_string ? `${escape_double(currentAlias)}.${escape_double(elem.target.name)} COLLATE NOCASE` : `${escape_double(currentAlias)}.${escape_double(elem.target.name)}`;
             order_elems.push(
-              `${escape_double(currentAlias)}.${escape_double(
-                elem.target.name
-              )} ${elem.order_direction}`
+              `${field_name} ${elem.order_direction}`
             );
           }
           break;
-        case "single_column_aggregate":
-          throw new Forbidden("Single Column Aggregate not supported yet", {});
-        case "star_count_aggregate":
-          throw new Forbidden("Single Column Aggregate not supported yet", {});
+        // case "single_column_aggregate":
+        //   throw new Forbidden("Single Column Aggregate not supported yet", {});
+        // case "star_count_aggregate":
+        //   throw new Forbidden("Single Column Aggregate not supported yet", {});
         default:
           throw new Forbidden("The types lied 😭", {});
       }
@@ -611,6 +740,36 @@ ${limit_sql}
 ${offset_sql}
 `);
 
+  if (query.aggregates) {
+    run_agg = true;
+
+    const agg_columns = buildAggregateColumns(query.aggregates, "subq");
+
+    agg_sql = wrap_data(`
+      SELECT JSON_OBJECT(
+        ${agg_columns
+          .map((col) => {
+            const parts = col.split(" as ");
+            return `${escape_single(parts[1].replace('"', '').replace('"', ''))}, ${parts[0]}`;
+          })
+          .join(",")}
+      ) as data
+      FROM (
+        SELECT * 
+        FROM ${from_sql}
+        ${agg_where_conditions.join(" AND ")}  
+        ${order_by_sql}
+        ${limit_sql}
+        ${offset_sql}
+      ) subq
+    `);
+  }
+
+  if (query.groups) {
+    run_group = true;
+    group_sql = buildGroupQuery(query, query_request, config, collection, collection_alias, path);
+  }
+
   if (path.length === 1) {
     sql = wrap_data(sql);
     // console.log(format(formatSQLWithArgs(sql, args), { language: "sqlite" }));
@@ -619,10 +778,13 @@ ${offset_sql}
   return {
     runSql: run_sql,
     runAgg: run_agg,
+    runGroup: run_group,
     sql,
     args,
     aggSql: agg_sql,
     aggArgs: agg_args,
+    groupSql: group_sql,
+    groupArgs: group_args
   };
 }
 
@@ -652,6 +814,7 @@ export async function plan_queries(
           query_variables,
           [],
           [],
+          [],
           null,
           query.collection_relationships,
           configuration.duckdbConfig.collection_aliases
@@ -671,6 +834,7 @@ export async function plan_queries(
       {},
       [],
       [],
+      [],
       null,
       query.collection_relationships,
       configuration.duckdbConfig.collection_aliases
@@ -680,9 +844,9 @@ export async function plan_queries(
   return query_plan;
 }
 
-async function do_all(con: any, query: SQLQuery): Promise<any[]> {
+async function do_all(con: any, sql: string, args: any[]): Promise<any[]> {
   return new Promise((resolve, reject) => {
-    con.all(query.sql, ...query.args, function (err: any, res: any) {
+    con.all(sql, ...args, function (err: any, res: any) {
       if (err) {
         reject(err);
       } else {
@@ -700,35 +864,30 @@ export async function perform_query(
   for (let query_plan of query_plans) {
     try {
       const connection = await db.connect();
-      let row_set: RowSet = { rows: [] };
+      let row_set: RowSet = {};  // Start with empty object
 
-      // Handle aggregate query if present
-      if (query_plan.runAgg) {
-        const aggRes = await do_all(connection, {
-          runSql: true,
-          runAgg: false,
-          sql: query_plan.aggSql,
-          args: query_plan.aggArgs,
-          aggSql: "",
-          aggArgs: [],
-        });
-        const parsedAggData = JSON.parse(aggRes[0]["data"]);
-        row_set.aggregates = parsedAggData;
-      }
-
-      // Handle regular query if present
       if (query_plan.runSql) {
-        const res = await do_all(connection, {
-          runSql: true,
-          runAgg: false,
-          sql: query_plan.sql,
-          args: query_plan.args,
-          aggSql: "",
-          aggArgs: [],
-        });
+        const res = await do_all(connection, query_plan.sql, query_plan.args);
         const regular_results = JSON.parse(res[0]["data"]);
         row_set.rows = regular_results.rows;
       }
+
+      if (query_plan.runAgg) {
+        const res = await do_all(connection, query_plan.aggSql, query_plan.aggArgs);
+        const parsedAggData = JSON.parse(res[0]["data"]);
+        row_set.aggregates = parsedAggData;
+      }
+
+      if (query_plan.runGroup) {
+        const res = await do_all(connection, query_plan.groupSql, query_plan.groupArgs);
+        const parsedGroupData = JSON.parse(res[0]["data"]);
+        row_set.groups = parsedGroupData;
+      }
+
+      if (!query_plan.runSql && !query_plan.runAgg && !query_plan.runGroup){
+        throw new Forbidden("Must run something 😭", {});
+      }
+
       response.push(row_set);
       await connection.close();
     } catch (err) {
