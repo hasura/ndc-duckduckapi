@@ -105,6 +105,34 @@ To test, run the ts connector and refresh the supergraph project (step 3 onwards
 
 _TODO:_
 
+## Single-tenant support
+
+```typescript
+const DATABASE_SCHEMA = "create table if not exists foo( ... )";
+
+const connectorConfig: duckduckapi = {
+  dbSchema: DATABASE_SCHEMA,
+  functionsFilePath: path.resolve(__dirname, "./functions.ts"),
+};
+```
+
+## Multi-tenant support
+
+```typescript
+const connectorConfig: duckduckapi = {
+  dbSchema: DATABASE_SCHEMA,
+  functionsFilePath: path.resolve(__dirname, "./functions.ts"),
+  multitenantMode: true,
+  oauthProviderName: "zendesk",
+};
+```
+
+A `Tenant` is identified by the tenantToken in the `oauthProviderName` key of the `x-hasura-oauth-services` header forwarded by the engine.
+
+A `Tenant` has a unique `tenantId` and an isolated duckdb database. Multiple tenantTokens can map to the same `Tenant` over multiple logins.
+
+The [Zendesk data connector](https://github.com/hasura/zendesk-data-connector) is an example of a multi-tenant data connector.
+
 ## Duck DB Features
 
 Below, you'll find a matrix of all supported features for the DuckDB connector:

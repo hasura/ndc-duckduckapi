@@ -10,9 +10,10 @@ import {
   Type,
   ObjectField
 } from "@hasura/ndc-sdk-typescript";
-import { Configuration, State } from "../duckduckapi";
+import { Configuration } from "../duckduckapi";
 const SqlString = require("sqlstring-sqlite");
 import { MAX_32_INT } from "../constants";
+import { Database } from "duckdb-async";
 
 const escape_single = (s: any) => SqlString.escape(s);
 const escape_double = (s: any) => `"${SqlString.escape(s).slice(1, -1)}"`;
@@ -110,36 +111,41 @@ function isStringType(field_def: ObjectField | undefined): boolean {
 
 function isTimestampType(field_def: ObjectField | undefined): boolean {
   if (!field_def) return false;
-  
+
   function checkType(type: any): boolean {
     if (type.type === "nullable") {
       return checkType(type.underlying_type);
     }
     return type.type === "named" && (type.name === "Timestamp" || type.name === "TimestampTz");
   }
-  
+
   return checkType(field_def.type);
 }
 
 function getIntegerType(field_def: ObjectField | undefined): string | null {
   if (!field_def) return null;
-  
+
   function checkType(type: any): string | null {
     if (type.type === "nullable") {
       return checkType(type.underlying_type);
     }
     if (type.type === "named") {
       switch (type.name) {
-        case "BigInt": return "BIGINT";
-        case "UBigInt": return "UBIGINT";
-        case "HugeInt": return "HUGEINT";
-        case "UHugeInt": return "UHUGEINT";
-        default: return null;
+        case "BigInt":
+          return "BIGINT";
+        case "UBigInt":
+          return "UBIGINT";
+        case "HugeInt":
+          return "HUGEINT";
+        case "UHugeInt":
+          return "UHUGEINT";
+        default:
+          return null;
       }
     }
     return null;
   }
-  
+
   return checkType(field_def.type);
 }
 
@@ -269,6 +275,8 @@ function build_where(
         throw new Forbidden("Binary Comparison Operator Aggregate not implemented", {});
       }
       const object_type = config.duckdbConfig?.object_types[query_request.collection];
+      const object_type =
+        config.duckdbConfig?.object_types[query_request.collection];
       const field_def = object_type?.fields[expression.column.name];
       const isTimestamp = isTimestampType(field_def);
       const integerType = getIntegerType(field_def);
@@ -423,7 +431,11 @@ function build_where(
   return sql;
 }
 
-function getColumnExpression(field_def: any, collection_alias: string, column: string): string {
+function getColumnExpression(
+  field_def: any,
+  collection_alias: string,
+  column: string
+): string {
   // Helper function to handle the actual type
   function handleNamedType(type: Type): string {
     if (type.type != "named"){
@@ -440,6 +452,11 @@ function getColumnExpression(field_def: any, collection_alias: string, column: s
         return `CAST(${escape_double(collection_alias)}.${escape_double(column)} AS TEXT)`;
       default:
         return `${escape_double(collection_alias)}.${escape_double(column)}`;
+  function handleNamedType(type: any): string {
+    if (type.name === "BigInt") {
+      return `CAST(${escape_double(collection_alias)}.${escape_double(
+        column
+      )} AS TEXT)`;
     }
   }
 
@@ -508,7 +525,8 @@ function build_query(
       collect_rows.push(escape_single(field_name));
       switch (field_value.type) {
         case "column":
-          const object_type = config.duckdbConfig.object_types[query_request.collection];
+          const object_type =
+            config.duckdbConfig.object_types[query_request.collection];
           let field_def = object_type.fields[field_value.column];
           collect_rows.push(
             getColumnExpression(field_def, collection_alias, field_value.column)
@@ -897,7 +915,7 @@ async function do_all(con: any, sql: string, args: any[]): Promise<any[]> {
 }
 
 export async function perform_query(
-  state: State,
+  db: Database,
   query_plans: SQLQuery[]
 ): Promise<QueryResponse> {
   const response: RowSet[] = [];
@@ -906,6 +924,24 @@ export async function perform_query(
       const connection = await state.client.connect();
       let row_set: RowSet = {};  // Start with empty object
 
+      const connection = await db.connect();
+      let row_set: RowSet = { rows: [] };
+
+      // Handle aggregate query if present
+      if (query_plan.runAgg) {
+        const aggRes = await do_all(connection, {
+          runSql: true,
+          runAgg: false,
+          sql: query_plan.aggSql,
+          args: query_plan.aggArgs,
+          aggSql: "",
+          aggArgs: [],
+        });
+        const parsedAggData = JSON.parse(aggRes[0]["data"]);
+        row_set.aggregates = parsedAggData;
+      }
+
+      // Handle regular query if present
       if (query_plan.runSql) {
         const res = await do_all(connection, query_plan.sql, query_plan.args);
         const regular_results = JSON.parse(res[0]["data"]);

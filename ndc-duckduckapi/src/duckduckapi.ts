@@ -26,22 +26,50 @@ import { Connection, Database } from "duckdb-async";
 import fs from "fs-extra";
 import path from "path";
 
-// Make a connection manager
+let DATABASE_SCHEMA = "";
+
+// Single tenant
 const DUCKDB_URL = "duck.db";
 let db: Database;
 export async function getDB() {
   if (!db) {
-    const duckDBUrl = (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL;
-
-    const dirPath = path.dirname(duckDBUrl);
-    if (dirPath !== ".") {
-      await fs.ensureDir(dirPath);
-    }
-
-    db = await Database.create(duckDBUrl);
-    console.log("Database file at", duckDBUrl);
+    const dbUrl = (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL;
+    db = await openDatabaseFile(dbUrl);
   }
   return db;
+}
+
+// Multi tenant
+export interface Tenant {
+  tenantId: string;
+  tenantToken: string | null;
+  db: Database;
+  syncState: string;
+}
+
+export type TenantToken = string;
+
+const tenants = new Map<TenantToken, Tenant>();
+
+export function getTenants() {
+  return tenants;
+}
+
+export function getTenantById(tenantId: string): Tenant | null {
+  for (let [_, tenant] of tenants.entries()) {
+    if (tenant.tenantId === tenantId) {
+      return tenant;
+    }
+  }
+  return null;
+}
+
+export async function getTenantDB(tenantId: string) {
+  const tenantDb = getTenantById(tenantId)?.db;
+  if (tenantDb) return tenantDb;
+
+  const dbUrl = `duck-${tenantId}.db`;
+  return await openDatabaseFile(dbUrl);
 }
 
 export async function transaction(
@@ -66,28 +94,6 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-// // Example usage:
-// const connectionManager = new DuckDBConnectionManager('mydb.db', 3);
-//
-// // Async usage
-// async function example() {
-//   // Each operation gets its own connection
-//   const result1 = await connectionManager.withConnection(async (conn) => {
-//     return await conn.all('SELECT * FROM mytable');
-//   });
-//
-//   const result2 = await connectionManager.withConnection(async (conn) => {
-//     return await conn.run('INSERT INTO mytable VALUES (?)');
-//   });
-// }
-//
-// // Sync usage
-// function exampleSync() {
-//   const result = connectionManager.withConnectionSync((conn) => {
-//     return conn.prepare('SELECT * FROM mytable').all();
-//   });
-// }
-
 export type DuckDBConfigurationSchema = {
   collection_names: string[];
   collection_aliases: { [k: string]: string };
@@ -96,47 +102,29 @@ export type DuckDBConfigurationSchema = {
   procedures: ProcedureInfo[];
 };
 
-type CredentialSchema = {
-  url: string;
-};
-
 export type Configuration = lambdaSdk.Configuration & {
   duckdbConfig: DuckDBConfigurationSchema;
 };
 
-export type State = lambdaSdk.State & {
-  client: Database;
-};
-
-async function createDuckDBFile(schema: string): Promise<void> {
-  try {
-    const db = await getDB();
-    await db.run(schema);
-    console.log("Schema created successfully");
-  } catch (err) {
-    console.error("Error creating schema:", err);
-    throw err;
-  }
-}
+export type State = lambdaSdk.State;
 
 export interface duckduckapi {
   dbSchema: string;
   functionsFilePath: string;
+  multitenantMode?: boolean;
+  oauthProviderName?: string;
 }
 
 export async function makeConnector(
   dda: duckduckapi
 ): Promise<Connector<Configuration, State>> {
+  DATABASE_SCHEMA = dda.dbSchema;
+
   db = await getDB();
 
   const lambdaSdkConnector = lambdaSdk.createConnector({
     functionsFilePath: dda.functionsFilePath,
   });
-
-  /**
-   * Create the db and load the DB path as a global variable
-   */
-  await createDuckDBFile(dda.dbSchema);
 
   const connector: Connector<Configuration, State> = {
     /**
@@ -150,8 +138,6 @@ export async function makeConnector(
     ): Promise<Configuration> {
       // Load DuckDB configuration by instrospecting DuckDB
       const duckdbConfig = await generateConfig(db);
-
-      console.log("#####", dda.functionsFilePath);
 
       const config = await lambdaSdkConnector.parseConfiguration(
         configurationDir
@@ -178,11 +164,7 @@ export async function makeConnector(
       configuration: Configuration,
       metrics: Registry
     ): Promise<State> {
-      const state = await lambdaSdkConnector.tryInitState(
-        configuration,
-        metrics
-      );
-      return Promise.resolve({ ...state, client: db });
+      return lambdaSdkConnector.tryInitState(configuration, metrics);
     },
 
     /**
@@ -258,8 +240,10 @@ export async function makeConnector(
       if (configuration.functionsSchema.functions[request.collection]) {
         return lambdaSdkConnector.query(configuration, state, request);
       } else {
+        const db = selectTenantDatabase(dda, request?.arguments?.headers);
+
         let query_plans = await plan_queries(configuration, request);
-        return await perform_query(state, query_plans);
+        return await perform_query(db, query_plans);
       }
     },
 
@@ -315,8 +299,13 @@ export async function makeConnector(
 export function getOAuthCredentialsFromHeader(
   headers: JSONValue
 ): Record<string, any> {
+  if (!headers) {
+    console.log("Engine header forwarding is disabled");
+    throw new Error("Engine header forwarding is disabled");
+  }
+
   const oauthServices = headers.value as any;
-  console.log(oauthServices);
+
   try {
     const decodedServices = Buffer.from(
       oauthServices["x-hasura-oauth-services"] as string,
@@ -331,4 +320,48 @@ export function getOAuthCredentialsFromHeader(
     }
     throw error;
   }
+}
+
+function selectTenantDatabase(dda: duckduckapi, headers: any): Database {
+  if (!dda.multitenantMode) {
+    return db;
+  }
+
+  const token =
+    getOAuthCredentialsFromHeader(headers)?.[dda.oauthProviderName!]
+      ?.access_token;
+
+  const tenantDb = tenants.get(token)?.db;
+
+  if (!tenantDb) {
+    throw new Forbidden("Tenant not found", {});
+  }
+
+  return tenantDb;
+}
+
+async function openDatabaseFile(dbUrl: string): Promise<Database> {
+  const { dbPath, dirPath } = getDatabaseFileParts(dbUrl);
+
+  if (dirPath !== ".") {
+    await fs.ensureDir(dirPath);
+  }
+
+  const db = await Database.create(dbPath);
+  await db.run(DATABASE_SCHEMA);
+
+  console.log("Opened database file at", dbPath);
+
+  return db;
+}
+
+function getDatabaseFileParts(dbUrl: string) {
+  const dbPath = path.resolve(
+    (process.env["DUCKDB_PATH"] as string) ?? ".",
+    dbUrl
+  );
+
+  const dirPath = path.dirname(dbPath);
+
+  return { dbPath, dirPath };
 }
