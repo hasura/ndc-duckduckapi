@@ -4,10 +4,28 @@ import {
   ScalarType,
   ObjectType,
 } from "@hasura/ndc-sdk-typescript";
-import { DuckDBConfigurationSchema } from "../duckduckapi";
+import { DuckDBConfigurationSchema, duckduckapi } from "../duckduckapi";
 import { SCALAR_TYPES } from "../constants";
 
-export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functionsNDCSchema: SchemaResponse): SchemaResponse {
+function getHeadersArgument(dda: duckduckapi) {
+  if (dda.multitenantMode) {
+    return {
+      [dda.headersArgumentName]: {
+        type: {
+          type: "named",
+          name: "JSON",
+        },
+      },
+    } as const;
+  }
+  return {};
+}
+
+export function do_get_schema(
+  dda: duckduckapi,
+  duckdbconfig: DuckDBConfigurationSchema,
+  functionsNDCSchema: SchemaResponse
+): SchemaResponse {
   if (!duckdbconfig) {
     throw new Error("Configuration is missing");
   }
@@ -17,11 +35,13 @@ export function do_get_schema(duckdbconfig: DuckDBConfigurationSchema, functions
     if (collection_names.includes(cn)) {
       collection_infos.push({
         name: cn,
-        arguments: {},
+        arguments: {
+          ...getHeadersArgument(dda),
+        },
         type: cn,
         uniqueness_constraints: {},
         foreign_keys: {},
-        description: object_types[cn].description
+        description: object_types[cn].description,
       });
     }
   });

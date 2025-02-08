@@ -101,11 +101,29 @@ To test, run the ts connector and refresh the supergraph project (step 3 onwards
 
 ----------------------------
 
+### Environment variables
+
+The connector supports the following environment variables:
+
+- `DUCKDB_PATH`: Path inside the docker container to store DuckDB database.
+  - On DDN, set this to inside the /etc/connector/persist-data directory to persist data on connector restarts.
+  - DDN scaffolded value: `/etc/connector/persist-data/db`
+  - Default value: `./persist-data/db`
+- `DUCKDB_URL`: Optional. File name of the default DuckDB database. Relative to the DUCKDB_PATH.
+  - Default value: `./duck.db`
+
+DDN recognizes the following additional environment variables:
+
+- `FEATURE_PERSISTENT_DATA`: Optional. Whether to persist data in the connector deployment.
+  - DDN scaffolded value: `true`
+- `FEATURE_MIN_INSTANCES`: Optional. Minimum number of instances to keep running (set to 1 to keep one instance running at all times).
+  - DDN scaffolded value: `1`
+
 ### How to add a custom OAuth2 provider
 
-_TODO:_
+DDN console has built in OAuth provider templates that can be used by end users to connect to external services.
 
-## Single-tenant support
+### Single-tenant support
 
 ```typescript
 const DATABASE_SCHEMA = "create table if not exists foo( ... )";
@@ -116,20 +134,17 @@ const connectorConfig: duckduckapi = {
 };
 ```
 
-## Multi-tenant support
+### Multi-tenant support
 
 ```typescript
 const connectorConfig: duckduckapi = {
   dbSchema: DATABASE_SCHEMA,
   functionsFilePath: path.resolve(__dirname, "./functions.ts"),
   multitenantMode: true,
-  oauthProviderName: "zendesk",
+  headersArgumentName: "headers",
+  getTenantIdFromHeaders: (headers: JSONValue) => string
 };
 ```
-
-A `Tenant` is identified by the tenantToken in the `oauthProviderName` key of the `x-hasura-oauth-services` header forwarded by the engine.
-
-A `Tenant` has a unique `tenantId` and an isolated duckdb database. Multiple tenantTokens can map to the same `Tenant` over multiple logins.
 
 The [Zendesk data connector](https://github.com/hasura/zendesk-data-connector) is an example of a multi-tenant data connector.
 

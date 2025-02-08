@@ -26,61 +26,47 @@ import { Connection, Database } from "duckdb-async";
 import fs from "fs-extra";
 import path from "path";
 
+const DUCKDB_PATH =
+  (process.env["DUCKDB_PATH"] as string) ?? "./persist-data/db";
+const DUCKDB_URL = (process.env["DUCKDB_URL"] as string) ?? "duck.db";
+
 let DATABASE_SCHEMA = "";
 
 // Single tenant
-const DUCKDB_URL = "duck.db";
 let db: Database;
 export async function getDB() {
   if (!db) {
-    const dbUrl = (process.env["DUCKDB_URL"] as string) ?? DUCKDB_URL;
-    db = await openDatabaseFile(dbUrl);
+    db = await openDatabaseFile(DUCKDB_URL);
   }
   return db;
 }
 
 // Multi tenant
-export interface Tenant {
-  tenantId: string;
-  tenantToken: string | null;
-  db: Database;
-  syncState: string;
-}
+type TenantId = string;
+const tenants = new Map<TenantId, Database>();
 
-export type TenantToken = string;
+export async function getTenantDB(tenantId: TenantId) {
+  let tenantDb = tenants.get(tenantId);
 
-const tenants = new Map<TenantToken, Tenant>();
-
-export function getTenants() {
-  return tenants;
-}
-
-export function getTenantById(tenantId: string): Tenant | null {
-  for (let [_, tenant] of tenants.entries()) {
-    if (tenant.tenantId === tenantId) {
-      return tenant;
-    }
+  if (!tenantDb) {
+    const dbUrl = `duck-${tenantId}.db`;
+    tenantDb = await openDatabaseFile(dbUrl);
+    tenants.set(tenantId, tenantDb);
   }
-  return null;
+
+  return tenantDb;
 }
 
-export async function getTenantDB(tenantId: string) {
-  const tenantDb = getTenantById(tenantId)?.db;
-  if (tenantDb) return tenantDb;
-
-  const dbUrl = `duck-${tenantId}.db`;
-  return await openDatabaseFile(dbUrl);
-}
-
-export async function transaction(
+export async function transaction<T>(
   db: Database,
-  fn: (conn: Connection) => Promise<void>
-) {
+  fn: (conn: Connection) => Promise<T>
+): Promise<T> {
   const conn = await db.connect();
   await conn.run("begin");
   try {
-    await fn(conn);
+    const result = await fn(conn);
     await conn.run("commit");
+    return result;
   } catch (e) {
     await conn.run("rollback");
     throw e;
@@ -108,12 +94,19 @@ export type Configuration = lambdaSdk.Configuration & {
 
 export type State = lambdaSdk.State;
 
-export interface duckduckapi {
+export type duckduckapi = {
   dbSchema: string;
   functionsFilePath: string;
-  multitenantMode?: boolean;
-  oauthProviderName?: string;
-}
+} & (
+  | {
+      multitenantMode?: undefined | false;
+    }
+  | {
+      multitenantMode: true;
+      getTenantIdFromHeaders: (headers: JSONValue) => string;
+      headersArgumentName: string;
+    }
+);
 
 export async function makeConnector(
   dda: duckduckapi
@@ -189,7 +182,7 @@ export async function makeConnector(
       configuration: Configuration
     ): Promise<SchemaResponse> {
       const schema = await lambdaSdkConnector.getSchema(configuration);
-      return do_get_schema(configuration.duckdbConfig, schema);
+      return do_get_schema(dda, configuration.duckdbConfig, schema);
     },
 
     /**
@@ -240,7 +233,7 @@ export async function makeConnector(
       if (configuration.functionsSchema.functions[request.collection]) {
         return lambdaSdkConnector.query(configuration, state, request);
       } else {
-        const db = selectTenantDatabase(dda, request?.arguments?.headers);
+        const db = await selectTenantDatabase(dda, request?.arguments?.headers);
 
         let query_plans = await plan_queries(configuration, request);
         return await perform_query(db, query_plans);
@@ -296,48 +289,17 @@ export async function makeConnector(
   return Promise.resolve(connector);
 }
 
-export function getOAuthCredentialsFromHeader(
-  headers: JSONValue
-): Record<string, any> {
-  if (!headers) {
-    console.log("Engine header forwarding is disabled");
-    throw new Error("Engine header forwarding is disabled");
-  }
-
-  const oauthServices = headers.value as any;
-
-  try {
-    const decodedServices = Buffer.from(
-      oauthServices["x-hasura-oauth-services"] as string,
-      "base64"
-    ).toString("utf-8");
-    const serviceTokens = JSON.parse(decodedServices);
-    return serviceTokens;
-  } catch (error) {
-    console.log(error);
-    if (error instanceof Error) {
-      console.log(error.stack);
-    }
-    throw error;
-  }
-}
-
-function selectTenantDatabase(dda: duckduckapi, headers: any): Database {
+async function selectTenantDatabase(
+  dda: duckduckapi,
+  headers: any
+): Promise<Database> {
   if (!dda.multitenantMode) {
     return db;
   }
 
-  const token =
-    getOAuthCredentialsFromHeader(headers)?.[dda.oauthProviderName!]
-      ?.access_token;
+  const tenantId = dda.getTenantIdFromHeaders(headers);
 
-  const tenantDb = tenants.get(token)?.db;
-
-  if (!tenantDb) {
-    throw new Forbidden("Tenant not found", {});
-  }
-
-  return tenantDb;
+  return getTenantDB(tenantId);
 }
 
 async function openDatabaseFile(dbUrl: string): Promise<Database> {
@@ -356,10 +318,7 @@ async function openDatabaseFile(dbUrl: string): Promise<Database> {
 }
 
 function getDatabaseFileParts(dbUrl: string) {
-  const dbPath = path.resolve(
-    (process.env["DUCKDB_PATH"] as string) ?? ".",
-    dbUrl
-  );
+  const dbPath = path.resolve(DUCKDB_PATH, dbUrl);
 
   const dirPath = path.dirname(dbPath);
 
