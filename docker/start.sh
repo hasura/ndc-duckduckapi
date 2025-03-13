@@ -10,4 +10,4 @@ cd /functions
 # are propagated properly. "npm start" does not propagate SIGTERM to the
 # actual started process
 START_CMD=$(jq -r ".scripts.start" "package.json")
-NODE_OPTIONS="--max-old-space-size=4096" PATH=$PATH:/functions/node_modules/.bin exec $START_CMD
+NODE_OPTIONS="${NODE_OPTIONS:-"--max-old-space-size=4096"}" PATH=$PATH:/functions/node_modules/.bin exec $START_CMD

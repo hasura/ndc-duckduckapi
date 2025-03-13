@@ -111,6 +111,8 @@ The connector supports the following environment variables:
   - Default value: `./persist-data/db`
 - `DUCKDB_URL`: Optional. File name of the default DuckDB database. Relative to the DUCKDB_PATH.
   - Default value: `./duck.db`
+- `NODE_OPTIONS`: Optional. Node options for the connector.
+  - Default value: `--max-old-space-size=4096`
 
 DDN recognizes the following additional environment variables:
 
