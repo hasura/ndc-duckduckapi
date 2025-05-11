@@ -13,6 +13,24 @@ Of course, the tradeoff is that the data will only be eventually consistent beca
 
 The DuckDuckAPI connector is also able to advertise endpoints for running job statuses, and OAuth configuration and login flows. These integrate with the DDN Console, or can be integrated into custom solutions using the API.
 
+- [Hasura DuckDuckAPI connector](#hasura-duckduckapi-connector)
+  - [Developer guide](#developer-guide)
+    - [How to add this to your DDN project](#how-to-add-this-to-your-ddn-project)
+      - [1. Creating a project and the developer workflow](#1-creating-a-project-and-the-developer-workflow)
+      - [2. DDN console integration](#2-ddn-console-integration)
+    - [Building with the connector](#building-with-the-connector)
+    - [Single-tenant and multi-tenant](#single-tenant-and-multi-tenant)
+    - [Initialising the connector](#initialising-the-connector)
+    - [Functions features](#functions-features)
+    - [Configuring OAuth workflows](#configuring-oauth-workflows)
+    - [Examples](#examples)
+    - [Environment variables](#environment-variables)
+  - [Duck DB Features](#duck-db-features)
+  - [Contributing](#contributing)
+    - [Development](#development)
+    - [Publishing](#publishing)
+
+
 ---
 
 ## Developer guide
