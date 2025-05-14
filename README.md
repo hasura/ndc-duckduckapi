@@ -23,6 +23,7 @@ The DuckDuckAPI connector is also able to advertise endpoints for running job st
     - [Initialising the connector](#initialising-the-connector)
     - [Functions features](#functions-features)
     - [Configuring OAuth workflows](#configuring-oauth-workflows)
+    - [Immutable builds, persistence, and local development](#immutable-builds-persistence-and-local-development)
     - [Examples](#examples)
     - [Environment variables](#environment-variables)
   - [Duck DB Features](#duck-db-features)
@@ -158,6 +159,25 @@ A job is a long running process, for instance a loop used to sync a user's infor
 
 `oauthProviders` define the OAuth login flows that the connector can accept. The `template` is an enumerated value of strings that the DDN console currently supports.
 
+### Immutable builds, persistence, and local development
+
+The DuckDuckAPI connector is built on the design of immutable builds. Every build initialises the whole schema on an empty database and syncs the data independently.
+
+In DDN cloud, a build persists its own data if configured to do so via the environment variable `FEATURE_PERSISTENT_DATA` (by default set to `true`).
+
+In local development, by default no volume mount is set up for the DuckDB database. This enables iterative development where you can continue to change the schema and restart the container, without having to worry about the new schema cleanly applying on the old one. However, you may with to enable persistence for your DuckDuckAPI connector, to enable the persistence of already synced data, by mounting a volume to env var `DUCKDB_PATH` (by default it is `/etc/connector/persist-data/db`).
+
+```yaml
+services:
+  app_myduckduckapi:
+    # ... other configuration elided
+    volumes:
+      - duckduckapi:/etc/connector/persist-data
+
+volumes:
+  duckduckapi:
+```
+
 ### Examples
 
 Single-tenant example: [Run PromptQL on your GitHub data](https://github.com/hasura/example-promptql-github/tree/main) [Tutorial](https://hasura.io/docs/promptql/recipes/tutorials/github-assistant/)
@@ -183,7 +203,7 @@ The connector supports the following environment variables. They all have usable
   - On DDN, set this to inside the /etc/connector/persist-data directory to persist data on connector restarts.
   - DDN scaffolded value: `/etc/connector/persist-data/db`
   - Default value: `./persist-data/db`
-- `DUCKDB_URL`: Optional. File name of the default DuckDB database. Relative to the DUCKDB_PATH.
+- `DUCKDB_URL`: Optional. File name of the default DuckDB database. Resolved relative to the DUCKDB_PATH.
   - Default value: `./duck.db`
 - `NODE_OPTIONS`: Optional. Node options for the connector.
   - Default value: `--max-old-space-size=4096`
