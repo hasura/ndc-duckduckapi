@@ -98,15 +98,15 @@ export type duckduckapi = {
   dbSchema: string;
   functionsFilePath: string;
 } & (
-  | {
+    | {
       multitenantMode?: undefined | false;
     }
-  | {
+    | {
       multitenantMode: true;
       getTenantIdFromHeaders: (headers: JSONValue) => string;
       headersArgumentName: string;
     }
-);
+  );
 
 export async function makeConnector(
   dda: duckduckapi
@@ -310,7 +310,12 @@ async function openDatabaseFile(dbUrl: string): Promise<Database> {
   }
 
   const db = await Database.create(dbPath);
-  await db.run(DATABASE_SCHEMA);
+  // Many adhoc connectors like CSV connector dynamically create duckdb tables and load it with data on initialization. This requires some custom program logic interleaved with DDLs.
+  // Using the makeConnector(connnectorConfig) flow doesn't suffice for such use-cases but calling getDB() outside this flow doesn't update DATABASE_SCHEMA which is still empty.
+  // Ideally, getDB() shouldn't initialize a DATABASE_SCHEMA but that is a larger refactor.
+  if (DATABASE_SCHEMA != "") {
+    await db.run(DATABASE_SCHEMA);
+  }
 
   console.log("Opened database file at", dbPath);
 
