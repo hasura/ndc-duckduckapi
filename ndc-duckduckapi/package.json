@@ -36,6 +36,9 @@
     "sql-formatter": "^13.0.4",
     "sqlstring-sqlite": "^0.1.1"
   },
+  "overrides": {
+    "protobufjs": "^7.6.3"
+  },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^29.5.14",
