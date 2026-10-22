@@ -1,4 +1,4 @@
-FROM node:20-bookworm
+FROM node:24.22.1-bookworm
 
 SHELL ["/bin/bash", "-c"]
 
@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y jq curl ca-certificates \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ca-certificates)" ge 20250419~deb12u2
 
 # Copy scripts and set up functions directory
-# Node bundled roots are independent of the OS bundle. Select the patched OS store.
-ENV NODE_OPTIONS="--use-openssl-ca --max-old-space-size=4096" \
+# Patched Node and the OS store are independent trust inputs; retain OS trust selection.
+ENV NODE_OPTIONS="--no-experimental-strip-types --use-openssl-ca --max-old-space-size=4096" \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     SSL_CERT_DIR=/etc/ssl/certs
 
